@@ -10,23 +10,55 @@
 #define DEFAULT_PORT 6969
 #define FPS 20
 
-static void draw_ui(const client_state_t *client)
+
+static void draw_lobby(const client_state_t *client)
 {
     erase();
 
     mvprintw(0, 0, "Bomberman");
-    mvprintw(4, 0, "Spēlētāji:");
+    mvprintw(2, 0, "Jauna spēle: jūs esat priekšnamā!");
 
-    mvprintw(6, 0, "[1] %s ready=%u", client->name, client->ready);
-    for (int i = 0; i < client->welcome.other_count; i++) {
-        mvprintw(7 + i, 0, "[%u] %s ready=%u", i + 2, 
-            client->welcome.others[i].name, 
-            client->welcome.others[i].ready);
+    if (!client->ready) {
+        mvprintw(4, 0, "Spied 'R', lai paziņotu gatavību");
+    } else {
+        mvprintw(4, 0, "Esat gatavs! Gaidiet citus spēlētājus...");
     }
 
-    mvprintw(15, 0, "Press q to quit");
+    mvprintw(6, 0, "Spēlētāji:");
+
+    // yourself
+    attron(COLOR_PAIR(client->ready ? 1 : 2));
+    mvprintw(8, 0, "[1] %s", client->name);
+    attroff(COLOR_PAIR(client->ready ? 1 : 2));
+
+    // others
+    for (int i = 0; i < client->welcome.other_count; i++) {
+        attron(COLOR_PAIR(client->welcome.others[i].ready ? 1 : 2));
+        mvprintw(9 + i, 0, "[%u] %s", i + 2, client->welcome.others[i].name);
+        attroff(COLOR_PAIR(client->welcome.others[i].ready ? 1 : 2)); 
+    }
+
+    mvprintw(18, 0, "Spied 'X', lai pamestu spēli");
+
     refresh();
 }
+
+
+static void draw_running(const client_state_t *client)
+{
+    erase();
+
+    refresh();
+}
+
+
+static void draw_end(const client_state_t *client)
+{
+    erase();
+
+    refresh();
+}
+
 
 int main(int argc, char *argv[])
 {
@@ -65,19 +97,41 @@ int main(int argc, char *argv[])
     timeout(1000 / FPS);
     curs_set(0);
 
+    start_color();
+    init_pair(1, COLOR_GREEN, COLOR_BLACK);
+    init_pair(2, COLOR_RED, COLOR_BLACK);
+
     int running = 1;
     while (running) {
         if (client_poll_network(&client) < 0) {
             running = 0;
             break;
         }
-        draw_ui(&client);
+
+        switch (client.welcome.game_status) {
+            case GAME_LOBBY:
+                draw_lobby(&client);
+                break;
+
+            case GAME_RUNNING:
+                draw_running(&client);
+                break;
+
+            case GAME_END:
+                draw_end(&client);
+                break;
+        }
 
         int ch = getch();
         switch (ch) {
-            case 'q':
+            case 'x':
                 running = 0;
                 break;
+            case 'r':
+                if (client.ready == 0) {
+                    client.ready = 1;
+                    send_set_ready(client.fd, client.my_id, SERVER);
+                }
         }
     }
 

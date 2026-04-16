@@ -128,12 +128,13 @@ int send_leave(int fd, uint8_t sender_id, uint8_t target_id)
 }
 
 
-int recv_leave(int fd, msg_generic_t *header)
-{
-    if (read_exact(fd, header, sizeof(*header)) < 0) {
-        return -1;
-    }
-    if (header->msg_type != MSG_LEAVE) {
+int send_set_ready(int fd, uint8_t sender_id, uint8_t target_id) {
+    msg_generic_t header = {
+        .msg_type = MSG_SET_READY,
+        .sender_id = sender_id,
+        .target_id = target_id
+    };
+    if (write_exact(fd, &header, sizeof(header)) < 0) {
         return -1;
     }
     return 0;

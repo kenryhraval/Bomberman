@@ -113,7 +113,16 @@ int main(void) {
 
                 } else if (header.msg_type == MSG_LEAVE) {
                     printf("Client %d sent LEAVE\n", i);
+                    // header-only message, no payload to read
                     remove_client(&state, i);
+
+                } else if (header.msg_type == MSG_SET_READY) {
+                    printf("Client %d sent SET_READY\n", i);
+                    // header-only message, no payload to read
+                    state.players[i].ready = 1;
+
+                    // informē visus par jauno spēlētāju gatavību
+                    send_welcome_to_all(&state);
 
                 } else {
                     printf("Unhandled message type %u from client %d\n", header.msg_type, i);

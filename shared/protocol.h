@@ -21,10 +21,6 @@ typedef struct {
 } msg_hello_t;
 
 typedef struct {
-    uint8_t ready;
-} msg_set_ready_t;
-
-typedef struct {
     uint8_t game_status;
 } msg_set_status_t;
 
@@ -167,14 +163,22 @@ Ja serveris šo ziņu nosūta klientam, tad tas nozīmē, ka klients, kura ID ir
 avots, ir atvienojies vai ticis atvienots
 */
 int send_leave(int fd, uint8_t sender_id, uint8_t target_id);
-int recv_leave(int fd, msg_generic_t *header);
 
 /*
 Ziņu nosūta serveris klientam, pirms close(socket). Pēc šīs ziņas saņemšanas klientam
 vajadzētu aizvērt TCP savienojumu.
 */
 int send_disconnect(int fd, uint8_t sender_id, uint8_t target_id);
-int recv_disconnect(int fd, msg_generic_t *header);
+
+
+/*
+Klients šo ziņu serverim nosūta, lai norādītu savu gatavību sākt spēli. Kad visi spēlētāji ir
+iestatījuši sevi kā gatavus, tad tiek sākta spēle.
+Serveris ir tiesīgs nosūtīt šo ziņu arī tad, ja attiecīgais klients nav tādu nosūtījis, tādējādi
+“piespiedu kārtā” padarot to par spēlētāju. Tā var īstenot, piemēram, iespēju pieslēgties
+pēc savienojuma pazušanas spēles laikā
+*/
+int send_set_ready(int fd, uint8_t sender_id, uint8_t target_id);
 
 #endif
 
