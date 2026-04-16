@@ -54,7 +54,7 @@ typedef enum {
 } msg_type_t;
 
 typedef struct {
-    char id[MAX_CLIENT_ID_LEN + 1];
+    uint8_t id;
     char name[MAX_NAME_LEN + 1];
     uint16_t row;
     uint16_t col;

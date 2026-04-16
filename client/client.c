@@ -37,8 +37,18 @@ int main(int argc, char *argv[]) {
 
     // 3. build HELLO
     msg_hello_t hello = {0};
-    snprintf(hello.player_id, sizeof(hello.player_id), "bomb-client-0.1");
-    snprintf(hello.player_name, sizeof(hello.player_name), "henrijs");
+    snprintf(hello.client_id, sizeof(hello.client_id), "bomb-client-0.1");
+    
+    printf("Enter your player name: ");
+    fflush(stdout);
+
+    if (fgets(hello.player_name, sizeof(hello.player_name), stdin) == NULL) {
+        printf("Failed to read name\n");
+        return 1;
+    }
+
+    // remove newline '\n' if present
+    hello.player_name[strcspn(hello.player_name, "\n")] = '\0';
 
     // 4. send HELLO
     if (send_hello(fd, 255, 255, &hello) < 0) {
@@ -57,12 +67,29 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
+    uint8_t my_id = header.target_id;
+
     printf("Received WELCOME:\n");
-    printf("  server_id: %s\n", welcome.server_id);
-    printf("  status: %u\n", welcome.game_status);
+    printf("  my_id: %u\n", my_id);
+    printf("  game_status: %u\n", welcome.game_status);
+    
+    if (welcome.other_count > 0) {
+        printf("  other_players:\n");
+        for (int i = 0; i < welcome.other_count; i++) {
+            printf("    (%d) player:\n", i);
+            printf("        ready: %u\n", welcome.others[i].ready);
+            printf("        name: %s\n", welcome.others[i].name);
+        }
+    } else {
+        printf("  no other players\n");
+    }
 
     printf("Press Enter to quit...\n");
     getchar();
+
+    if (send_leave(fd, my_id, 255) < 0) {
+        printf("Failed to send LEAVE\n");
+    }
 
     close(fd);
 

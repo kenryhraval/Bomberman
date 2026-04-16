@@ -16,7 +16,7 @@ typedef struct {
 // payload structs for simple messages
 
 typedef struct {
-    char player_id[MAX_CLIENT_ID_LEN + 1];
+    char client_id[MAX_CLIENT_ID_LEN + 1];
     char player_name[MAX_NAME_LEN + 1];
 } msg_hello_t;
 
@@ -160,6 +160,21 @@ Kā ziņas avots tiek norādīts piešķirtais spēlētāja ID.
 int send_welcome(int fd, uint8_t sender_id, uint8_t target_id, const msg_welcome_t *msg);
 int recv_welcome(int fd, msg_generic_t *header, msg_welcome_t *msg);
 
+/*
+Ja klients šo ziņu nosūta serverim, tas nozīmē, ka tas grasās atvienoties. Pēc šīs ziņas
+nosūtīšanas klientam jāaizver savienojums.
+Ja serveris šo ziņu nosūta klientam, tad tas nozīmē, ka klients, kura ID ir norādīts kā ziņas
+avots, ir atvienojies vai ticis atvienots
+*/
+int send_leave(int fd, uint8_t sender_id, uint8_t target_id);
+int recv_leave(int fd, msg_generic_t *header);
+
+/*
+Ziņu nosūta serveris klientam, pirms close(socket). Pēc šīs ziņas saņemšanas klientam
+vajadzētu aizvērt TCP savienojumu.
+*/
+int send_disconnect(int fd, uint8_t sender_id, uint8_t target_id);
+int recv_disconnect(int fd, msg_generic_t *header);
 
 #endif
 

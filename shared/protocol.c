@@ -113,3 +113,29 @@ int recv_welcome(int fd, msg_generic_t *header, msg_welcome_t *msg)
     return 0;
 }
 
+
+int send_leave(int fd, uint8_t sender_id, uint8_t target_id) 
+{
+    msg_generic_t header = {
+        .msg_type = MSG_LEAVE,
+        .sender_id = sender_id,
+        .target_id = target_id
+    };
+    if (write_exact(fd, &header, sizeof(header)) < 0) {
+        return -1;
+    }
+    return 0;
+}
+
+
+int recv_leave(int fd, msg_generic_t *header)
+{
+    if (read_exact(fd, header, sizeof(*header)) < 0) {
+        return -1;
+    }
+    if (header->msg_type != MSG_LEAVE) {
+        return -1;
+    }
+    return 0;
+}
+
