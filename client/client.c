@@ -37,7 +37,7 @@ int main(int argc, char *argv[]) {
 
     // 3. build HELLO
     msg_hello_t hello = {0};
-    snprintf(hello.client_id, sizeof(hello.client_id), "bomb-client-0.1");
+    snprintf(hello.player_id, sizeof(hello.player_id), "bomb-client-0.1");
     snprintf(hello.player_name, sizeof(hello.player_name), "henrijs");
 
     // 4. send HELLO
@@ -61,7 +61,9 @@ int main(int argc, char *argv[]) {
     printf("  server_id: %s\n", welcome.server_id);
     printf("  status: %u\n", welcome.game_status);
 
-    // 6. cleanup
+    printf("Press Enter to quit...\n");
+    getchar();
+
     close(fd);
 
     return 0;

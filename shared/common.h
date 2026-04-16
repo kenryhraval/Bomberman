@@ -7,8 +7,8 @@
 #define TICKS_PER_SECOND 20
 #define MAX_NAME_LEN 29
 #define MAX_CLIENT_ID_LEN 19
-#define TARGET_SERVER 255
-#define TARGET_BROADCAST 254
+#define SERVER 255
+#define BROADCAST 254
 
 typedef enum {
     GAME_LOBBY = 0,
@@ -54,7 +54,7 @@ typedef enum {
 } msg_type_t;
 
 typedef struct {
-    uint8_t id;
+    char id[MAX_CLIENT_ID_LEN + 1];
     char name[MAX_NAME_LEN + 1];
     uint16_t row;
     uint16_t col;

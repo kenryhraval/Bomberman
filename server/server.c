@@ -8,9 +8,19 @@
 
 #define PORT 6969
 
+typedef struct {
+    int fd;
+    uint8_t id;
+    int connected;
+} client_t;
+
 int main(void) {
     int server_fd, client_fd;
     struct sockaddr_in remote_address;
+
+    client_t clients[MAX_PLAYERS] = {0};
+    player_t players[MAX_PLAYERS] = {0};
+    uint8_t next_id = 0;
 
     // 1. create socket
     server_fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -37,43 +47,61 @@ int main(void) {
 
     printf("Server listening on port %d...\n", PORT);
 
-    // 4. accept
-    client_fd = accept(server_fd, NULL, NULL);
-    if (client_fd < 0) {
-        perror("accept");
-        return 1;
+    while (1) {
+        msg_generic_t header;
+        msg_hello_t hello;
+
+        client_fd = accept(server_fd, NULL, NULL);
+        if (client_fd < 0) {
+            perror("accept");
+            continue;
+        }
+
+        if (next_id >= MAX_PLAYERS) {
+            printf("Server full, rejecting client\n");
+            close(client_fd);
+            continue;
+        }
+
+        printf("Client connected\n");
+
+        if (recv_hello(client_fd, &header, &hello) < 0) {
+            printf("Failed to receive HELLO\n");
+            close(client_fd);
+            continue;
+        }
+
+        printf("Received HELLO:\n");
+        printf("  player_id: %s\n", hello.player_id);
+        printf("  player_name: %s\n", hello.player_name);
+
+        clients[next_id].fd = client_fd;
+        clients[next_id].id = next_id;
+        clients[next_id].connected = 1;
+
+        strncpy(players[next_id].id, hello.player_id, MAX_CLIENT_ID_LEN);
+        players[next_id].id[MAX_CLIENT_ID_LEN] = '\0';
+        strncpy(players[next_id].name, hello.player_name, MAX_NAME_LEN);
+        players[next_id].name[MAX_NAME_LEN] = '\0';
+
+        msg_welcome_t welcome = {0};
+        snprintf(welcome.server_id, sizeof(welcome.server_id), "bomb-server-0.1");
+        welcome.game_status = GAME_LOBBY;
+        welcome.other_count = next_id;
+
+        if (send_welcome(client_fd, 255, next_id, &welcome) < 0) {
+            printf("Failed to send WELCOME\n");
+            close(client_fd);
+            clients[next_id].connected = 0;
+            continue;
+        }
+
+        printf("Sent WELCOME to player %u\n", next_id);
+
+        next_id++;
     }
 
-    printf("Client connected\n");
 
-    // 5. receive HELLO
-    msg_generic_t header;
-    msg_hello_t hello;
-
-    if (recv_hello(client_fd, &header, &hello) < 0) {
-        printf("Failed to receive HELLO\n");
-        return 1;
-    }
-
-    printf("Received HELLO:\n");
-    printf("  client_id: %s\n", hello.client_id);
-    printf("  player_name: %s\n", hello.player_name);
-
-    // 6. send WELCOME (minimal version)
-    msg_welcome_t welcome = {0};
-    snprintf(welcome.server_id, sizeof(welcome.server_id), "bomb-server-0.1");
-    welcome.game_status = GAME_LOBBY;
-    welcome.other_count = 0;
-
-    if (send_welcome(client_fd, server_fd, client_fd, &welcome) < 0) {
-        printf("Failed to send WELCOME\n");
-        return 1;
-    }
-
-    printf("Sent WELCOME\n");
-
-    // 7. cleanup
-    close(client_fd);
     close(server_fd);
 
     return 0;

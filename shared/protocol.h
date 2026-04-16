@@ -16,7 +16,7 @@ typedef struct {
 // payload structs for simple messages
 
 typedef struct {
-    char client_id[MAX_CLIENT_ID_LEN + 1];
+    char player_id[MAX_CLIENT_ID_LEN + 1];
     char player_name[MAX_NAME_LEN + 1];
 } msg_hello_t;
 
