@@ -81,3 +81,35 @@ int recv_hello(int fd, msg_generic_t *header, msg_hello_t *msg)
     return 0;
 }
 
+
+int send_welcome(int fd, uint8_t sender_id, uint8_t target_id, const msg_welcome_t *msg) 
+{
+    msg_generic_t header = {
+        .msg_type = MSG_WELCOME,
+        .sender_id = sender_id,
+        .target_id = target_id
+    };
+    if (write_exact(fd, &header, sizeof(header)) < 0) {
+        return -1;
+    }
+    if (write_exact(fd, msg, sizeof(*msg)) < 0) {
+        return -1;
+    }
+    return 0;
+}
+
+
+int recv_welcome(int fd, msg_generic_t *header, msg_welcome_t *msg)
+{
+    if (read_exact(fd, header, sizeof(*header)) < 0) {
+        return -1;
+    }
+    if (header->msg_type != MSG_WELCOME) {
+        return -1;
+    }
+    if (read_exact(fd, msg, sizeof(*msg)) < 0) {
+        return -1;
+    }
+    return 0;
+}
+
