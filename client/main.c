@@ -8,10 +8,11 @@
 
 #define DEFAULT_IP "127.0.0.1"
 #define DEFAULT_PORT 6969
+#define FPS 20
 
 static void draw_ui(const client_state_t *client)
 {
-    clear();
+    erase();
 
     mvprintw(0, 0, "Bomberman");
     mvprintw(4, 0, "Spēlētāji:");
@@ -61,7 +62,7 @@ int main(int argc, char *argv[])
     noecho();
     cbreak();
     keypad(stdscr, TRUE);
-    nodelay(stdscr, TRUE);
+    timeout(1000 / FPS);
     curs_set(0);
 
     int running = 1;
