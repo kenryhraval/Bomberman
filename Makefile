@@ -7,7 +7,7 @@ server:
 	$(CC) $(CFLAGS) server/server.c shared/protocol.c -o build/server_app
 
 client:
-	$(CC) $(CFLAGS) client/client.c shared/protocol.c -o build/client_app
+	$(CC) $(CFLAGS) client/client.c client/main.c shared/protocol.c -o build/client_app -lncursesw
 
 clean:
 	rm -f build/server_app build/client_app
