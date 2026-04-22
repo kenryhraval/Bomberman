@@ -1,5 +1,12 @@
+#pragma once
 #include <stdint.h>
 #include <stdbool.h>
+
+#if defined(__GNUC__) || defined(__clang__)
+#define PACKED __attribute__((packed))
+#else
+#define PACKED
+#endif
 
 // from LSP_game_specs_2026
 
@@ -53,7 +60,7 @@ typedef enum {
     MSG_BLOCK_DESTROYED = 47
 } msg_type_t;
 
-typedef struct {
+typedef struct PACKED {
     uint8_t id;
     char name[MAX_NAME_LEN + 1];
     uint16_t row;
@@ -66,7 +73,7 @@ typedef struct {
     uint16_t speed;
 } player_t;
 
-typedef struct {
+typedef struct PACKED {
     bool active;
     uint8_t owner_id;
     uint16_t row;

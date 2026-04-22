@@ -140,3 +140,38 @@ int send_set_ready(int fd, uint8_t sender_id, uint8_t target_id) {
     return 0;
 }
 
+int send_disconnect(int fd, uint8_t sender_id, uint8_t target_id) {
+    msg_generic_t header = {
+        .msg_type = MSG_DISCONNECT,
+        .sender_id = sender_id,
+        .target_id = target_id
+    };
+    if (write_exact(fd, &header, sizeof(header)) < 0) {
+        return -1;
+    }
+    return 0;
+}
+
+int send_pong(int fd, uint8_t sender_id, uint8_t target_id) {
+    msg_generic_t header = {
+        .msg_type = MSG_PONG,
+        .sender_id = sender_id,
+        .target_id = target_id
+    };
+    if (write_exact(fd, &header, sizeof(header)) < 0) {
+        return -1;
+    }
+    return 0;
+}
+
+int send_ping(int fd, uint8_t sender_id, uint8_t target_id) {
+    msg_generic_t header = {
+        .msg_type = MSG_PING,
+        .sender_id = sender_id,
+        .target_id = target_id
+    };
+    if (write_exact(fd, &header, sizeof(header)) < 0) {
+        return -1;
+    }
+    return 0;
+}

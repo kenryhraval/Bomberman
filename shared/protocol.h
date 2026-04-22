@@ -7,7 +7,7 @@
 
 // from LSP_game_specs_2026
 
-typedef struct {
+typedef struct PACKED {
     uint8_t msg_type; // ziņas tips, kas nosaka datu struktūru
     uint8_t sender_id;
     uint8_t target_id; // adresāta ID. 255=server. 254=broadcast.
@@ -15,77 +15,77 @@ typedef struct {
 
 // payload structs for simple messages
 
-typedef struct {
+typedef struct PACKED {
     char client_id[MAX_CLIENT_ID_LEN + 1];
     char player_name[MAX_NAME_LEN + 1];
 } msg_hello_t;
 
-typedef struct {
+typedef struct PACKED {
     uint8_t game_status;
 } msg_set_status_t;
 
-typedef struct {
+typedef struct PACKED {
     uint8_t winner_id;
 } msg_winner_t;
 
-typedef struct {
+typedef struct PACKED {
     uint8_t direction;   /* 'U', 'D', 'L', 'R' */
 } msg_move_attempt_t;
 
-typedef struct {
+typedef struct PACKED {
     uint8_t player_id;
     uint16_t cell;
 } msg_moved_t;
 
-typedef struct {
+typedef struct PACKED {
     uint16_t cell;
 } msg_bomb_attempt_t;
 
-typedef struct {
+typedef struct PACKED {
     uint8_t player_id;
     uint16_t cell;
 } msg_bomb_t;
 
-typedef struct {
+typedef struct PACKED {
     uint8_t radius;
     uint16_t cell;
 } msg_explosion_start_t;
 
-typedef struct {
+typedef struct PACKED {
     uint16_t cell;
 } msg_explosion_end_t;
 
-typedef struct {
+typedef struct PACKED {
     uint8_t player_id;
 } msg_death_t;
 
-typedef struct {
+typedef struct PACKED {
     uint8_t bonus_type;
     uint16_t cell;
 } msg_bonus_available_t;
 
-typedef struct {
+typedef struct PACKED {
     uint8_t player_id;
     uint16_t cell;
 } msg_bonus_retrieved_t;
 
-typedef struct {
+typedef struct PACKED {
     uint16_t cell;
 } msg_block_destroyed_t;
 
 // WELCOME
 
-typedef struct {
+typedef struct PACKED {
     uint8_t player_id;
     uint8_t ready;
     char name[MAX_NAME_LEN + 1];
 } welcome_client_entry_t;
 
-typedef struct {
+typedef struct PACKED {
     char server_id[MAX_CLIENT_ID_LEN + 1];
     uint8_t game_status;
     uint8_t other_count;
-    welcome_client_entry_t others[8];
+    welcome_client_entry_t others[MAX_PLAYERS];
 } msg_welcome_t;
 
 
@@ -179,6 +179,19 @@ Serveris ir tiesīgs nosūtīt šo ziņu arī tad, ja attiecīgais klients nav t
 pēc savienojuma pazušanas spēles laikā
 */
 int send_set_ready(int fd, uint8_t sender_id, uint8_t target_id);
+
+/*
+Ziņu var nosūtīt gan klients, gan serveris otrai komunikācijas pusei.
+Ja otra puse 30 sekunžu laikā neatbild ar PONG ziņu, var pieņemt, ka tai ir iestājies timeouts.
+*/
+int send_ping(int fd, uint8_t sender_id, uint8_t target_id);
+
+/*
+Atbilde uz PING ziņu
+*/
+int send_pong(int fd, uint8_t sender_id, uint8_t target_id);
+
+
 
 #endif
 
