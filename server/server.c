@@ -5,47 +5,36 @@
 #include <arpa/inet.h>
 #include <poll.h>
 
+#include "server.h"
+#include "client.h"
+#include "game.h"
+#include "map.h"
+
 #include "../shared/protocol.h"
 
-#define PORT 6969
-
-typedef struct {
-    int fd;
-    int connected;
-} client_t;
-
-typedef struct {
-    uint8_t game_status;
-    uint8_t player_count;
-    client_t clients[MAX_PLAYERS];
-    player_t players[MAX_PLAYERS];
-} server_state_t;
-
-
-int find_free_slot(client_t clients[]);
-void add_client(server_state_t *state, int fd);
-void remove_client(server_state_t *state, int id);
-void send_welcome_to_all(server_state_t *state);
-
-
-int main(void) {
+int serve_main(map_t *map)
+{
     int server_fd, client_fd;
     struct sockaddr_in remote_address;
 
-    server_state_t state;
-    state.game_status = GAME_LOBBY;
-    state.player_count = 0;
-    memset(state.clients, 0, sizeof(state.clients));
-    memset(state.players, 0, sizeof(state.players));
+    server_state_t server_state;
+    server_state.game_status = GAME_LOBBY;
+    server_state.player_count = 0;
+    server_state.map = map;
+    server_state.current_tick = 0;
+    memset(server_state.clients, 0, sizeof(server_state.clients));
+    init_event_queue(&server_state.queue);
+    pthread_mutex_init(&server_state.mutex, NULL);
 
     // 1. create socket
     server_fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (server_fd < 0) {
+    if (server_fd < 0)
+    {
         perror("socket");
         return 1;
     }
 
-    // avoid "Address already in use" error 
+    // avoid "Address already in use" error
     int opt = 1;
     setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
 
@@ -54,184 +43,198 @@ int main(void) {
     remote_address.sin_addr.s_addr = INADDR_ANY;
     remote_address.sin_port = htons(PORT);
 
-    if (bind(server_fd, (struct sockaddr *)&remote_address, sizeof(remote_address)) < 0) {
+    if (bind(server_fd, (struct sockaddr *)&remote_address, sizeof(remote_address)) < 0)
+    {
         perror("bind");
         return 1;
     }
 
     // 3. listen
-    if (listen(server_fd, MAX_PLAYERS) < 0) {
+    if (listen(server_fd, MAX_PLAYERS) < 0)
+    {
         perror("listen");
         return 1;
     }
 
     printf("Server listening on port %d...\n", PORT);
 
-    while (1) {
-        struct pollfd pfds[MAX_PLAYERS + 1];
-        int nfds = 0;
+    // 4. start game loop thread
+    pthread_t game_thread;
+    pthread_create(&game_thread, NULL, game_loop, &server_state);
 
-        pfds[nfds].fd = server_fd;
-        pfds[nfds].events = POLLIN;
-        nfds++;
-
-        for (int i = 0; i < MAX_PLAYERS; i++) {
-            if (state.clients[i].connected) {
-                pfds[nfds].fd = state.clients[i].fd;
-                pfds[nfds].events = POLLIN;
-                nfds++;
-            }
-        }
-
-        int ready = poll(pfds, nfds, -1);
-        if (ready < 0) {
-            perror("poll");
+    while (true)
+    {
+        client_fd = accept(server_fd, NULL, NULL);
+        if (client_fd < 0)
+        {
+            perror("accept");
             continue;
         }
 
-        // new incoming connection
-        if (pfds[0].revents & POLLIN) {
-            client_fd = accept(server_fd, NULL, NULL);
-            add_client(&state, client_fd);
-        }
+        pthread_mutex_lock(&server_state.mutex);
+        int free_idx = add_client(&server_state, client_fd);
+        pthread_mutex_unlock(&server_state.mutex);
 
-        // existing client messages
-        int idx = 1;
-        for (int i = 0; i < MAX_PLAYERS; i++) {
-            if (!state.clients[i].connected) continue;
+        if (free_idx < 0)
+            continue; // rejected
 
-            if (pfds[idx].revents & (POLLHUP | POLLERR | POLLNVAL)) {
-                printf("Client %d disconnected\n", i);
-                remove_client(&state, i);
+        // spawn client thread
+        client_thread_args_t *args = malloc(sizeof(client_thread_args_t));
+        args->state = &server_state;
+        args->client_idx = free_idx;
 
-            } else if (pfds[idx].revents & POLLIN) {
-                msg_generic_t header;
-
-                if (read_exact(state.clients[i].fd, &header, sizeof(header)) < 0) {
-                    printf("Client %d disconnected unexpectedly\n", i);
-                    remove_client(&state, i);
-
-                } else if (header.msg_type == MSG_LEAVE) {
-                    printf("Client %d sent LEAVE\n", i);
-                    // header-only message, no payload to read
-                    remove_client(&state, i);
-
-                } else if (header.msg_type == MSG_SET_READY) {
-                    printf("Client %d sent SET_READY\n", i);
-                    // header-only message, no payload to read
-                    state.players[i].ready = 1;
-
-                    // informē visus par jauno spēlētāju gatavību
-                    send_welcome_to_all(&state);
-
-                } else {
-                    printf("Unhandled message type %u from client %d\n", header.msg_type, i);
-                }
-            }
-
-            idx++;
-        }
+        pthread_t client_thread;
+        pthread_create(&client_thread, NULL, client_loop, args);
+        pthread_detach(client_thread); // nav jāgaida
     }
 
     close(server_fd);
     return 0;
 }
 
-
-int find_free_slot(client_t clients[]) {
-    for (int i = 0; i < MAX_PLAYERS; i++) {
-        if (!clients[i].connected) {
+int find_free_slot(client_t clients[])
+{
+    for (int i = 0; i < MAX_PLAYERS; i++)
+    {
+        if (!clients[i].connected)
+        {
             return i;
         }
     }
     return -1;
 }
 
-void add_client(server_state_t *state, int fd) {
+int add_client(server_state_t *state, int fd)
+{
     msg_generic_t header;
     msg_hello_t hello;
 
-    if (fd < 0) {
+    if (fd < 0)
+    {
         perror("accept");
-        return;
+        return -1;
     }
 
-    if (state->player_count >= MAX_PLAYERS) {
+    if (state->player_count >= MAX_PLAYERS)
+    {
         printf("Server full, rejecting client\n");
+        send_disconnect(fd, SERVER, 255); // TODO: Idk if 255 here is correct
         close(fd);
-        return;
+        return -1;
     }
 
-    int free_id = find_free_slot(state->clients);
-    if (free_id < 0) {
+    int free_idx = find_free_slot(state->clients);
+    if (free_idx < 0)
+    {
         printf("Server full, rejecting client\n");
+        send_disconnect(fd, SERVER, 255); // TODO: Idk if 255 here is correct
         close(fd);
-        return;
+        return -1;
     }
 
     printf("Client connected\n");
 
-    if (recv_hello(fd, &header, &hello) < 0) {
+    // 1. recieve HELLO message
+    if (recv_hello(fd, &header, &hello) < 0)
+    {
         printf("Failed to receive HELLO\n");
+        send_disconnect(fd, SERVER, 255); // TODO: Idk if 255 here is correct
         close(fd);
-        return;
+        return -1;
     }
 
     // pārbauda vai atbalsta klienta versiju
-    if (strncmp(hello.client_id, "bomb-client-0.1", MAX_CLIENT_ID_LEN) != 0) {
+    if (strncmp(hello.client_id, CLIENT_ID, MAX_CLIENT_ID_LEN) != 0)
+    {
         printf("Unsupported client version: %s\n", hello.client_id);
+        send_disconnect(fd, SERVER, 255); // TODO: Idk if 255 here is correct
         close(fd);
-        return;
+        return -1;
     }
 
-    state->clients[free_id].fd = fd;
-    state->clients[free_id].connected = 1;
-    state->players[free_id].id = free_id; // should generate non-guessable id
-    strncpy(state->players[free_id].name, hello.player_name, MAX_NAME_LEN);
-    state->players[free_id].name[MAX_NAME_LEN] = '\0';                 
+    client_t *c = &state->clients[free_idx];
+    player_t *p = &state->clients[free_idx].player;
+
+    // 2. register client
+    c->fd = fd;
+    c->connected = true;
+
+    p->id = free_idx;
+    p->alive = true;
+    p->ready = false;
+    p->last_move_tick = 0;
+    p->speed = state->map->configs.player_speed;
+    p->bomb_count = 10; // TODO: idk what bomb count to start with
+    p->bomb_radius = state->map->configs.explosion_radius;
+    p->bomb_timer_ticks = state->map->configs.bomb_timer_ticks;
+    p->row = state->map->configs.start_row[free_idx];
+    p->col = state->map->configs.start_col[free_idx];
+
+    strncpy(p->name, hello.player_name, MAX_NAME_LEN);
+    p->name[MAX_NAME_LEN] = '\0';
 
     state->player_count++;
 
-    // informē visus klientus par jauno spēlētāju sastāvu
-    send_welcome_to_all(state);
+    // 3. send WELCOME message to the new client
+    msg_welcome_t welcome = {0};
+    snprintf(welcome.server_id, sizeof(welcome.server_id), SERVER_ID);
+    welcome.game_status = state->game_status;
+    welcome.other_count = state->player_count - 1;
+    for (int j = 0, k = 0; j < MAX_PLAYERS && k < welcome.other_count; j++)
+    {
+        if (state->clients[j].connected && j != free_idx)
+        {
+            welcome.others[k].player_id = state->clients[j].player.id;
+            welcome.others[k].ready = state->clients[j].player.ready;
+            strncpy(welcome.others[k].name, state->clients[j].player.name, MAX_NAME_LEN);
+            welcome.others[k].name[MAX_NAME_LEN] = '\0';
+            k++;
+        }
+    }
+    int res = send_welcome(fd, SERVER, free_idx, &welcome);
+    if (res < 0)
+    {
+        printf("Failed to send WELCOME\n");
+        remove_client_quietly(state, free_idx);
+        return -1;
+    }
+
+    // 4. inform all other clients about the new player
+    // just retranslate HELLo message to all clients
+    broadcast_hello(state, free_idx, &hello);
+
+    return free_idx;
 }
 
 
-void remove_client(server_state_t *state, int id) {
+
+void remove_client_quietly(server_state_t *state, int id)
+{
     close(state->clients[id].fd);
     state->clients[id].fd = -1;
     state->clients[id].connected = 0;
 
-    state->players[id].id = 0;
-    state->players[id].name[0] = '\0';
-    state->players[id].alive = 0;
-    state->players[id].ready = 0;
+    state->clients[id].player.id = 0;
+    state->clients[id].player.name[0] = '\0';
+    state->clients[id].player.alive = 0;
+    state->clients[id].player.ready = 0;
 
-    state->player_count--; 
-
-    // informē visus klientus par jauno spēlētāju sastāvu
-    send_welcome_to_all(state);
+    state->player_count--;
 }
 
+void remove_client(server_state_t *state, int id)
+{
+    // broadcast LEAVE message to all other clients before removing
+    broadcast_leave(state, id);
 
-void send_welcome_to_all(server_state_t *state) {
-    for (int i = 0; i < MAX_PLAYERS; i++) {
-        if (state->clients[i].connected) {
-            msg_welcome_t welcome = {0};
-            snprintf(welcome.server_id, sizeof(welcome.server_id), "bomb-server-0.1");
-            welcome.game_status = GAME_LOBBY;
-            welcome.other_count = state->player_count - 1;
-            for (int j = 0, k = 0; j < MAX_PLAYERS && k < welcome.other_count; j++) {
-                if (state->clients[j].connected && j != i) {
-                    welcome.others[k].player_id = state->players[j].id;
-                    welcome.others[k].ready = state->players[j].ready;
-                    strncpy(welcome.others[k].name, state->players[j].name, MAX_NAME_LEN);
-                    welcome.others[k].name[MAX_NAME_LEN] = '\0';
-                    k++;
-                }
-            }
-            send_welcome(state->clients[i].fd, SERVER, state->players[i].id, &welcome);
-        }
-    }
+    close(state->clients[id].fd);
+    state->clients[id].fd = -1;
+    state->clients[id].connected = 0;
+
+    state->clients[id].player.id = 0;
+    state->clients[id].player.name[0] = '\0';
+    state->clients[id].player.alive = 0;
+    state->clients[id].player.ready = 0;
+
+    state->player_count--;
 }
-
