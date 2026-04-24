@@ -9,7 +9,7 @@
 #endif
 
 // from LSP_game_specs_2026
-
+#define START_BOMB_COUNT 1
 #define MAX_PLAYERS 8
 #define TICKS_PER_SECOND 20
 #define MAX_NAME_LEN 29

@@ -11,9 +11,13 @@ void *client_loop(void *args)
     int fd = state->clients[idx].fd;
     msg_generic_t header;
 
-    while (read_exact(fd, &header, sizeof(header)) > 0)
+    printf("Started client thread for client %d\n", idx);
+
+    while (read_exact(fd, &header, sizeof(header)) == 0)
     {
         pthread_mutex_lock(&state->mutex);
+
+        printf("Received msg type %u from client %d\n", header.msg_type, idx);
 
         switch (header.msg_type)
         {
@@ -81,8 +85,26 @@ void *client_loop(void *args)
         }
 
         case MSG_BOMB_ATTEMPT:
-            // likt event_queue
+        {
+            msg_bomb_attempt_t payload;
+            if (read_exact(fd, &payload, sizeof(payload)) < 0)
+            {
+                remove_client(state, idx);
+                pthread_mutex_unlock(&state->mutex);
+                return NULL; // exit thread
+            }
+
+            event_t ev = {
+                .type = EVENT_BOMB,
+                .player_id = idx,
+                .data.cell = payload.cell,
+            };
+
+            int res = enqueue_event(&state->queue, &ev);
+            if (res < 0)
+                printf("Failed to push bomb event for client %d\n", idx);
             break;
+        }
 
         default:
             printf("Unhandled msg %u from client %d\n", header.msg_type, idx);
@@ -90,6 +112,8 @@ void *client_loop(void *args)
 
         pthread_mutex_unlock(&state->mutex);
     }
+
+    printf("Client %d disconnected\n", idx);
 
     // recv return 0 meaning client discontected
     pthread_mutex_lock(&state->mutex);
@@ -232,8 +256,12 @@ bool all_players_ready(server_state_t *state)
 
 void start_game(server_state_t *state)
 {
-    state->game_status = GAME_RUNNING;
+    memset(state->bombs, 0, sizeof(state->bombs));
+    memset(state->explosions, 0, sizeof(state->explosions));
+    state->current_tick = 0;
     
+    state->game_status = GAME_RUNNING;
+
     // set all players to alive and put them on start positions
     for (int i = 0; i < MAX_PLAYERS; i++)
     {
@@ -243,6 +271,19 @@ void start_game(server_state_t *state)
         p->alive = true;
         p->row = state->map->configs.start_row[i];
         p->col = state->map->configs.start_col[i];
+
+        // set last_move_tick so that first player move is allowed immediately at game start
+        if (p->speed > 0)
+        {
+            uint64_t ticks_per_move = (TICKS_PER_SECOND + p->speed - 1) / p->speed;
+            p->last_move_tick = (state->current_tick >= ticks_per_move)
+                                    ? (state->current_tick - ticks_per_move)
+                                    : 0;
+        }
+        else
+        {
+            p->last_move_tick = state->current_tick;
+        }
     }
 
     // 1. broadcast SET_STATUS

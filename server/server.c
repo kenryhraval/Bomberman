@@ -12,6 +12,18 @@
 
 #include "../shared/protocol.h"
 
+int player_name_in_use(const server_state_t *state, const char *name)
+{
+    for (int i = 0; i < MAX_PLAYERS; i++)
+    {
+        if (!state->clients[i].connected)
+            continue;
+        if (strncmp(state->clients[i].player.name, name, MAX_NAME_LEN) == 0)
+            return 1;
+    }
+    return 0;
+}
+
 int serve_main(map_t *map)
 {
     int server_fd, client_fd;
@@ -23,6 +35,8 @@ int serve_main(map_t *map)
     server_state.map = map;
     server_state.current_tick = 0;
     memset(server_state.clients, 0, sizeof(server_state.clients));
+    memset(server_state.bombs, 0, sizeof(server_state.bombs));
+    memset(server_state.explosions, 0, sizeof(server_state.explosions));
     init_event_queue(&server_state.queue);
     pthread_mutex_init(&server_state.mutex, NULL);
 
@@ -108,6 +122,8 @@ int add_client(server_state_t *state, int fd)
 {
     msg_generic_t header;
     msg_hello_t hello;
+    char hello_client_id[MAX_CLIENT_ID_LEN + 1];
+    char hello_player_name[MAX_NAME_LEN + 1];
 
     if (fd < 0)
     {
@@ -143,11 +159,43 @@ int add_client(server_state_t *state, int fd)
         return -1;
     }
 
-    // pārbauda vai atbalsta klienta versiju
-    if (strncmp(hello.client_id, CLIENT_ID, MAX_CLIENT_ID_LEN) != 0)
+    if (/*header.sender_id != SERVER ||*/ header.target_id != SERVER)
     {
-        printf("Unsupported client version: %s\n", hello.client_id);
+        printf("Invalid HELLO routing fields: sender=%u target=%u\n", header.sender_id, header.target_id);
+        send_disconnect(fd, SERVER, 255);
+        close(fd);
+        return -1;
+    }
+
+    // save client_id and player_name from HELLO payload for later use
+    memcpy(hello_client_id, hello.client_id, MAX_CLIENT_ID_LEN);
+    hello_client_id[MAX_CLIENT_ID_LEN] = '\0';
+    memcpy(hello_player_name, hello.player_name, MAX_NAME_LEN);
+    hello_player_name[MAX_NAME_LEN] = '\0';
+
+    // check client version compatibility
+    if (strncmp(hello_client_id, CLIENT_ID, MAX_CLIENT_ID_LEN) != 0)
+    {
+        printf("Unsupported client version: %s\n", hello_client_id);
         send_disconnect(fd, SERVER, 255); // TODO: Idk if 255 here is correct
+        close(fd);
+        return -1;
+    }
+
+    // check for empty player name
+    if (hello_player_name[0] == '\0')
+    {
+        printf("Rejecting client with empty player name\n");
+        send_disconnect(fd, SERVER, 255);
+        close(fd);
+        return -1;
+    }
+
+    // check for duplicate player name
+    if (player_name_in_use(state, hello_player_name))
+    {
+        printf("Duplicate player name rejected: %s\n", hello_player_name);
+        send_disconnect(fd, SERVER, 255);
         close(fd);
         return -1;
     }
@@ -170,10 +218,12 @@ int add_client(server_state_t *state, int fd)
     p->row = state->map->configs.start_row[free_idx];
     p->col = state->map->configs.start_col[free_idx];
 
-    strncpy(p->name, hello.player_name, MAX_NAME_LEN);
+    strncpy(p->name, hello_player_name, MAX_NAME_LEN);
     p->name[MAX_NAME_LEN] = '\0';
 
     state->player_count++;
+
+    printf("Player joined: %s (id=%d)\n", p->name, p->id);
 
     // 3. send WELCOME message to the new client
     msg_welcome_t welcome = {0};
@@ -191,7 +241,7 @@ int add_client(server_state_t *state, int fd)
             k++;
         }
     }
-    int res = send_welcome(fd, SERVER, free_idx, &welcome);
+    int res = send_welcome(fd, free_idx, free_idx, &welcome);
     if (res < 0)
     {
         printf("Failed to send WELCOME\n");
@@ -199,14 +249,16 @@ int add_client(server_state_t *state, int fd)
         return -1;
     }
 
+    printf("Sent WELCOME to player %s (id=%d)\n", p->name, p->id);
+
     // 4. inform all other clients about the new player
     // just retranslate HELLo message to all clients
     broadcast_hello(state, free_idx, &hello);
 
+    printf("Broadcasted HELLO of player %s (id=%d) to other clients\n", p->name, p->id);
+
     return free_idx;
 }
-
-
 
 void remove_client_quietly(server_state_t *state, int id)
 {

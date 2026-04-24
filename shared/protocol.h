@@ -52,6 +52,7 @@ typedef struct PACKED {
 } msg_explosion_start_t;
 
 typedef struct PACKED {
+    uint8_t radius;
     uint16_t cell;
 } msg_explosion_end_t;
 
