@@ -16,6 +16,8 @@
 #define MAX_CLIENT_ID_LEN 19
 #define SERVER 255
 #define BROADCAST 254
+#define MAX_MAP_WIDTH 255
+#define MAX_MAP_HEIGHT 255
 
 typedef enum
 {

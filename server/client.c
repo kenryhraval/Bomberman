@@ -171,55 +171,47 @@ void broadcast_set_status(server_state_t *state, game_status_t status)
 
 void broadcast_map(server_state_t *state)
 {
-    msg_generic_t header = {
-        .msg_type = MSG_MAP,
-        .sender_id = SERVER,
-        .target_id = BROADCAST};
-
-    // payload: H, W, then cells
-    uint8_t h = state->map->rows;
-    uint8_t w = state->map->cols;
-    uint16_t cell_count = h * w;
+    msg_map_t map_msg = {
+        .height = state->map->rows,
+        .width = state->map->cols
+    };
 
     for (int i = 0; i < MAX_PLAYERS; i++)
     {
         if (!state->clients[i].connected)
             continue;
 
-        int fd = state->clients[i].fd;
-        write_exact(fd, &header, sizeof(header));
-        write_exact(fd, &h, sizeof(h));
-        write_exact(fd, &w, sizeof(w));
-        write_exact(fd, state->map->cells, cell_count);
+        // abstrakcijai visur vajadzētu send_x izmantot
+        send_map(state->clients[i].fd, SERVER, BROADCAST, &map_msg, state->map->cells);
     }
 }
 
-void broadcast_sync_board(server_state_t *state)
-{
-    for (int i = 0; i < MAX_PLAYERS; i++)
-    {
-        if (!state->clients[i].connected)
-            continue;
+// void broadcast_sync_board(server_state_t *state)
+// {
+//     for (int i = 0; i < MAX_PLAYERS; i++)
+//     {
+//         if (!state->clients[i].connected)
+//             continue;
 
-        player_t *p = &state->clients[i].player;
+//         player_t *p = &state->clients[i].player;
 
-        msg_generic_t header = {
-            .msg_type = MSG_SYNC_BOARD,
-            .sender_id = p->id,
-            .target_id = BROADCAST};
+//         msg_generic_t header = {
+//             .msg_type = MSG_SYNC_BOARD,
+//             .sender_id = p->id,
+//             .target_id = BROADCAST};
 
-        // sūta katram klientam info par šo spēlētāju
-        for (int j = 0; j < MAX_PLAYERS; j++)
-        {
-            if (!state->clients[j].connected)
-                continue;
+//         // sūta katram klientam info par šo spēlētāju
+//         for (int j = 0; j < MAX_PLAYERS; j++)
+//         {
+//             if (!state->clients[j].connected)
+//                 continue;
 
-            int fd = state->clients[j].fd;
-            write_exact(fd, &header, sizeof(header));
-            write_exact(fd, p, sizeof(player_t));
-        }
-    }
-}
+//             int fd = state->clients[j].fd;
+//             write_exact(fd, &header, sizeof(header));
+//             write_exact(fd, p, sizeof(player_t));
+//         }
+//     }
+// }
 
 
 bool all_players_ready(server_state_t *state)
@@ -258,6 +250,5 @@ void start_game(server_state_t *state)
     // 2. broadcast MAP
     broadcast_map(state);
 
-    // 3. broadcast SYNC_BOARD for each player
-    broadcast_sync_board(state);
+    // broadcast_sync_board(state);
 }
