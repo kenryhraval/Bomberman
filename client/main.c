@@ -11,11 +11,11 @@
 #define FPS 20
 
 
-static void draw_lobby(const client_state_t *client)
+static void draw_lobby(const client_state_t *state)
 {
     erase();
 
-    player_t me = client->players[client->my_id];
+    player_t me = state->players[state->my_id];
 
     mvprintw(0, 0, "Bomberman");
     mvprintw(2, 0, "Jauna spēle: jūs esat priekšnamā!");
@@ -29,15 +29,15 @@ static void draw_lobby(const client_state_t *client)
 
     int row = 8;
     for (int id = 0; id < MAX_PLAYERS; id++) {
-        if (client->players[id].name[0] == '\0')
+        if (state->players[id].name[0] == '\0')
             continue;
 
-        attron(COLOR_PAIR(client->players[id].ready ? 1 : 2));
+        attron(COLOR_PAIR(state->players[id].ready ? 1 : 2));
         mvprintw(row, 0, "[%u] %s%s",
-                 client->players[id].id,
-                 client->players[id].name,
-                 id == client->my_id ? " (jūs)" : "");
-        attroff(COLOR_PAIR(client->players[id].ready ? 1 : 2));
+                 state->players[id].id,
+                 state->players[id].name,
+                 id == state->my_id ? " (jūs)" : "");
+        attroff(COLOR_PAIR(state->players[id].ready ? 1 : 2));
 
         row++;
     }
@@ -47,15 +47,43 @@ static void draw_lobby(const client_state_t *client)
 }
 
 
-static void draw_running(const client_state_t *client)
+static void draw_running(const client_state_t *state)
 {
     erase();
+
+    mvprintw(0, 0, "Bomberman - spēle notiek");
+
+    int start_row = 2;
+    int start_col = 2;
+
+    for (int r = 0; r < state->map.rows; r++) {
+        for (int c = 0; c < state->map.cols; c++) {
+            uint16_t idx = make_cell_index(r, c, state->map.cols);
+            char cell = state->map.cells[idx];
+
+            mvprintw(start_row + r, start_col + c * 2, "%c", cell);
+        }
+    }
+
+    for (int i = 0; i < MAX_PLAYERS; i++) {
+        if (state->players[i].name[0] == '\0')
+            continue;
+        if (!state->players[i].alive)
+            continue;
+
+        mvprintw(start_row + state->players[i].row,
+                 start_col + state->players[i].col * 2,
+                 "%u",
+                 state->players[i].id);
+    }
+
+    mvprintw(start_row + state->map.rows + 2, 0, "WASD/arrows - move, B - bomb, X - exit");
 
     refresh();
 }
 
 
-static void draw_end(const client_state_t *client)
+static void draw_end(const client_state_t *state)
 {
     erase();
 
@@ -69,7 +97,7 @@ int main(int argc, char *argv[])
     const char *ip = DEFAULT_IP;
     int port = DEFAULT_PORT;
     
-    client_state_t game_state = {0};
+    client_state_t state = {0};
 
     if (argc >= 2) ip = argv[1]; 
     if (argc >= 3) port = atoi(argv[2]);
@@ -84,14 +112,14 @@ int main(int argc, char *argv[])
     }
     player_name[strcspn(player_name, "\n")] = '\0';
 
-    if (client_connect(&game_state, ip, port) < 0) {
+    if (client_connect(&state, ip, port) < 0) {
         printf("Failed to connect\n");
         return 1;
     }
 
-    if (client_handshake(&game_state, player_name) < 0) {
+    if (client_handshake(&state, player_name) < 0) {
         printf("Handshake failed\n");
-        client_close(&game_state);
+        client_close(&state);
         return 1;
     }
 
@@ -108,22 +136,22 @@ int main(int argc, char *argv[])
 
     int running = 1;
     while (running) {
-        if (client_poll_network(&game_state) < 0) {
+        if (client_poll_network(&state) < 0) {
             running = 0;
             break;
         }
 
-        switch (game_state.game_status) {
+        switch (state.game_status) {
             case GAME_LOBBY:
-                draw_lobby(&game_state);
+                draw_lobby(&state);
                 break;
 
             case GAME_RUNNING:
-                draw_running(&game_state);
+                draw_running(&state);
                 break;
 
             case GAME_END:
-                draw_end(&game_state);
+                draw_end(&state);
                 break;
         }
 
@@ -135,9 +163,9 @@ int main(int argc, char *argv[])
                 break;
             case 'r':
             case 'R':
-                if (!game_state.players[game_state.my_id].ready) {
-                    game_state.players[game_state.my_id].ready = true;
-                    send_set_ready(game_state.fd, game_state.my_id, SERVER);
+                if (!state.players[state.my_id].ready) {
+                    state.players[state.my_id].ready = true;
+                    send_set_ready(state.fd, state.my_id, SERVER);
                 }
                 break;
         }
@@ -145,8 +173,8 @@ int main(int argc, char *argv[])
 
     endwin();
 
-    client_send_leave(&game_state);
-    client_close(&game_state);
+    client_send_leave(&state);
+    client_close(&state);
     return 0;
 }
 

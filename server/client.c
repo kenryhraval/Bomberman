@@ -186,6 +186,24 @@ void broadcast_map(server_state_t *state)
     }
 }
 
+
+void broadcast_moved(server_state_t *state, uint8_t player_id, uint16_t cell)
+{
+    msg_moved_t moved_msg = {
+        .player_id = player_id,
+        .cell = cell
+    };
+
+    for (int i = 0; i < MAX_PLAYERS; i++)
+    {
+        if (!state->clients[i].connected)
+            continue;
+
+        send_moved(state->clients[i].fd, SERVER, state->clients[i].player.id, &moved_msg);
+    }
+}
+
+
 // void broadcast_sync_board(server_state_t *state)
 // {
 //     for (int i = 0; i < MAX_PLAYERS; i++)
@@ -240,8 +258,8 @@ void start_game(server_state_t *state)
             continue;
         player_t *p = &state->clients[i].player;
         p->alive = true;
-        p->row = state->map->configs.start_row[i];
-        p->col = state->map->configs.start_col[i];
+        p->row = state->config->start_row[i];
+        p->col = state->config->start_col[i];
     }
 
     // 1. broadcast SET_STATUS
@@ -250,5 +268,16 @@ void start_game(server_state_t *state)
     // 2. broadcast MAP
     broadcast_map(state);
 
-    // broadcast_sync_board(state);
+    // 3. broadcast positions
+    for (int i = 0; i < MAX_PLAYERS; i++)
+    {
+        if (!state->clients[i].connected)
+            continue;
+
+        player_t *p = &state->clients[i].player;
+        uint16_t cell = make_cell_index(p->row, p->col, state->map->cols);
+
+        broadcast_moved(state, p->id, cell);
+    }
+
 }

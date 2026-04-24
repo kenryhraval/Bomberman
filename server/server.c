@@ -12,15 +12,16 @@
 
 #include "../shared/protocol.h"
 
-int serve_main(map_t *map)
+int serve_main(map_t *map, config_t *config)
 {
     int server_fd, client_fd;
     struct sockaddr_in remote_address;
-
+    
     server_state_t server_state;
     server_state.game_status = GAME_LOBBY;
     server_state.player_count = 0;
     server_state.map = map;
+    server_state.config = config;
     server_state.current_tick = 0;
     memset(server_state.clients, 0, sizeof(server_state.clients));
     init_event_queue(&server_state.queue);
@@ -163,12 +164,12 @@ int add_client(server_state_t *state, int fd)
     p->alive = true;
     p->ready = false;
     p->last_move_tick = 0;
-    p->speed = state->map->configs.player_speed;
+    p->speed = state->config->player_speed;
     p->bomb_count = 10; // TODO: idk what bomb count to start with
-    p->bomb_radius = state->map->configs.explosion_radius;
-    p->bomb_timer_ticks = state->map->configs.bomb_timer_ticks;
-    p->row = state->map->configs.start_row[free_idx];
-    p->col = state->map->configs.start_col[free_idx];
+    p->bomb_radius = state->config->explosion_radius;
+    p->bomb_timer_ticks = state->config->bomb_timer_ticks;
+    p->row = state->config->start_row[free_idx];
+    p->col = state->config->start_col[free_idx];
 
     strncpy(p->name, hello.player_name, MAX_NAME_LEN);
     p->name[MAX_NAME_LEN] = '\0';
@@ -207,7 +208,6 @@ int add_client(server_state_t *state, int fd)
 }
 
 
-
 void remove_client_quietly(server_state_t *state, int id)
 {
     close(state->clients[id].fd);
@@ -221,6 +221,7 @@ void remove_client_quietly(server_state_t *state, int id)
 
     state->player_count--;
 }
+
 
 void remove_client(server_state_t *state, int id)
 {

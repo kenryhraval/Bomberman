@@ -19,14 +19,15 @@ int main(int argc, char *argv[]){
 
     // load map
     map_t map;
-    if (load_map(map_filename, &map) < 0)
+    config_t config;
+    if (load_map(map_filename, &map, &config) < 0)
     {
         fprintf(stderr, "Failed to load map from %s\n", map_filename);
         return 1;
     }
 
     // start server
-    serve_main(&map);
+    serve_main(&map, &config);
 
     return 0;
 }

@@ -194,3 +194,21 @@ int send_map(int fd, uint8_t sender_id, uint8_t target_id,
 
     return 0;
 }
+
+
+int send_moved(int fd, uint8_t sender_id, uint8_t target_id, const msg_moved_t *msg)
+{
+    msg_generic_t header = {
+        .msg_type = MSG_MOVED,
+        .sender_id = sender_id,
+        .target_id = target_id
+    };
+
+    if (write_exact(fd, &header, sizeof(header)) < 0)
+        return -1;
+
+    if (write_exact(fd, msg, sizeof(*msg)) < 0)
+        return -1;
+
+    return 0;
+}

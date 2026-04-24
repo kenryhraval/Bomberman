@@ -27,12 +27,13 @@ typedef struct {
     uint8_t player_count;
     client_t clients[MAX_PLAYERS];
     map_t* map;
+    config_t* config;
     event_queue_t queue;
     pthread_mutex_t mutex;
     uint64_t current_tick;
 } server_state_t;
 
-int serve_main(map_t *map);
+int serve_main(map_t *map, config_t *config);
 
 void broadcast_leave(server_state_t *state, int sender_idx);
 void broadcast_hello(server_state_t *state, int sender_idx, const msg_hello_t *hello);
