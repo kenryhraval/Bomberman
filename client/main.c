@@ -10,6 +10,15 @@
 #define DEFAULT_PORT 6969
 #define FPS 20
 
+static void send_move(client_state_t *state, uint8_t direction)
+{
+    msg_move_attempt_t move = {
+        .direction = direction
+    };
+
+    send_move_attempt(state->fd, state->my_id, SERVER, &move);
+}
+
 
 static void draw_lobby(const client_state_t *state)
 {
@@ -77,7 +86,7 @@ static void draw_running(const client_state_t *state)
                  state->players[i].id);
     }
 
-    mvprintw(start_row + state->map.rows + 2, 0, "WASD/arrows - move, B - bomb, X - exit");
+    mvprintw(start_row + state->map.rows + 2, 0, "WASD - move, B - bomb, X - exit");
 
     refresh();
 }
@@ -161,15 +170,45 @@ int main(int argc, char *argv[])
             case 'X':
                 running = 0;
                 break;
+
             case 'r':
             case 'R':
-                if (!state.players[state.my_id].ready) {
+                if (state.game_status == GAME_LOBBY &&
+                    !state.players[state.my_id].ready) {
                     state.players[state.my_id].ready = true;
                     send_set_ready(state.fd, state.my_id, SERVER);
                 }
                 break;
-        }
-    }
+
+            case 'w':
+            case 'W':
+            case KEY_UP:
+                if (state.game_status == GAME_RUNNING)
+                    send_move(&state, DIR_UP);
+                break;
+
+            case 's':
+            case 'S':
+            case KEY_DOWN:
+                if (state.game_status == GAME_RUNNING)
+                    send_move(&state, DIR_DOWN);
+                break;
+
+            case 'a':
+            case 'A':
+            case KEY_LEFT:
+                if (state.game_status == GAME_RUNNING)
+                    send_move(&state, DIR_LEFT);
+                break;
+
+            case 'd':
+            case 'D':
+            case KEY_RIGHT:
+                if (state.game_status == GAME_RUNNING)
+                    send_move(&state, DIR_RIGHT);
+                break;
+                }
+            }
 
     endwin();
 
