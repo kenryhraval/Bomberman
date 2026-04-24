@@ -35,7 +35,6 @@ void *client_loop(void *args)
 
             // check if all player ready to start game
             if (state->game_status == GAME_LOBBY && all_players_ready(state))
-            if (state->game_status == GAME_LOBBY && all_players_ready(state))
             {
                 start_game(state);
             }
@@ -135,9 +134,6 @@ void broadcast_hello(server_state_t *state, int sender_idx, const msg_hello_t *h
             // vienīgais veids, kā nodot jaunā sender_idx, 
             // ir iestatot sender_id kā apraides avotu
             send_hello(state->clients[i].fd, sender_idx, BROADCAST, hello);
-            // vienīgais veids, kā nodot jaunā sender_idx, 
-            // ir iestatot sender_id kā apraides avotu
-            send_hello(state->clients[i].fd, sender_idx, BROADCAST, hello);
         }
     }
 }
@@ -220,7 +216,7 @@ void broadcast_moved(server_state_t *state, uint8_t player_id, uint16_t cell)
 {
     msg_moved_t moved_msg = {
         .player_id = player_id,
-        .cell = cell
+        .cell = htons(cell)
     };
 
     for (int i = 0; i < MAX_PLAYERS; i++)

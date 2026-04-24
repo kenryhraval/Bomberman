@@ -184,8 +184,10 @@ int client_poll_network(client_state_t *state)
                 return -1;
 
             uint8_t id = moved.player_id;
-            state->players[id].row = moved.cell / state->map.cols;
-            state->players[id].col = moved.cell % state->map.cols;
+            uint16_t cell = ntohs(moved.cell);
+
+            state->players[id].row = cell / state->map.cols;
+            state->players[id].col = cell % state->map.cols;
             
         } else {
 
