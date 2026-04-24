@@ -2,6 +2,7 @@
 
 #include "game.h"
 #include "server.h"
+#include "client.h"
 
 #include <time.h>
 #include <arpa/inet.h>
@@ -91,6 +92,27 @@ void game_tick(void *arg)
     }
 }
 
+void broadcast_block_destroyed(server_state_t *state, uint16_t cell)
+{
+    msg_generic_t header = {
+        .msg_type = MSG_BLOCK_DESTROYED,
+        .sender_id = SERVER,
+        .target_id = BROADCAST,
+    };
+
+    msg_block_destroyed_t payload = {
+        .cell = htons(cell),
+    };
+
+    for (int i = 0; i < MAX_PLAYERS; i++)
+    {
+        if (!state->clients[i].connected)
+            continue;
+        write_exact(state->clients[i].fd, &header, sizeof(header));
+        write_exact(state->clients[i].fd, &payload, sizeof(payload));
+    }
+}
+
 void broadcast_explosion_end(server_state_t *state, uint16_t row, uint16_t col, uint8_t radius)
 {
     msg_generic_t header = {
@@ -100,7 +122,7 @@ void broadcast_explosion_end(server_state_t *state, uint16_t row, uint16_t col, 
 
     msg_explosion_end_t payload = {
         .radius = radius,
-        .cell = make_cell_index(row, col, state->map->cols)};
+        .cell = htons(make_cell_index(row, col, state->map->cols))};
 
     for (int i = 0; i < MAX_PLAYERS; i++)
     {
@@ -214,7 +236,7 @@ void broadcast_explosion_start(server_state_t *state, uint16_t row, uint16_t col
         .target_id = BROADCAST};
 
     msg_explosion_start_t payload = {
-        .cell = make_cell_index(row, col, state->map->cols),
+        .cell = htons(make_cell_index(row, col, state->map->cols)),
         .radius = radius};
 
     for (int i = 0; i < MAX_PLAYERS; i++)
@@ -245,6 +267,26 @@ void check_player_deaths(server_state_t *state, uint16_t row, uint16_t col)
     }
 }
 
+void broadcast_winner(server_state_t *state, uint8_t winner_id)
+{
+    msg_generic_t header = {
+        .msg_type = MSG_WINNER,
+        .sender_id = SERVER,
+        .target_id = BROADCAST};
+
+    msg_winner_t payload = {
+        .winner_id = winner_id,
+    };
+
+    for (int i = 0; i < MAX_PLAYERS; i++)
+    {
+        if (!state->clients[i].connected)
+            continue;
+        write_exact(state->clients[i].fd, &header, sizeof(header));
+        write_exact(state->clients[i].fd, &payload, sizeof(payload));
+    }
+}
+
 void check_win_condition(server_state_t *state)
 {
     // already have a winner or game not running
@@ -271,14 +313,14 @@ void check_win_condition(server_state_t *state)
     if (alive_count == 1)
     {
         broadcast_winner(state, last_alive_id);
-        broadcast_set_status(state, GAME_END);
+        broadcast_set_game_status(state, GAME_END);
         state->game_status = GAME_END;
     }
     else if (alive_count == 0)
     {
         // draw
         broadcast_winner(state, 255); // TODO: How to indicate draw?
-        broadcast_set_status(state, GAME_END);
+        broadcast_set_game_status(state, GAME_END);
         state->game_status = GAME_END;
     }
 }

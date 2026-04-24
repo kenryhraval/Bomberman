@@ -98,7 +98,7 @@ void *client_loop(void *args)
             event_t ev = {
                 .type = EVENT_BOMB,
                 .player_id = idx,
-                .data.cell = payload.cell,
+                .data.cell = ntohs(payload.cell),
             };
 
             int res = enqueue_event(&state->queue, &ev);
@@ -171,7 +171,7 @@ void broadcast_leave(server_state_t *state, int sender_idx)
     }
 }
 
-void broadcast_set_status(server_state_t *state, game_status_t status)
+void broadcast_set_game_status(server_state_t *state, game_status_t status)
 {
     msg_set_status_t payload = {
         .game_status = status,
@@ -278,6 +278,9 @@ void start_game(server_state_t *state)
         p->alive = true;
         p->row = state->map->configs.start_row[i];
         p->col = state->map->configs.start_col[i];
+        p->bomb_count = START_BOMB_COUNT;
+        p->bomb_radius = state->map->configs.explosion_radius;
+        p->bomb_timer_ticks = state->map->configs.bomb_timer_ticks;
 
         // set last_move_tick so that first player move is allowed immediately at game start
         if (p->speed > 0)
@@ -294,7 +297,7 @@ void start_game(server_state_t *state)
     }
 
     // 1. broadcast SET_STATUS
-    broadcast_set_status(state, GAME_RUNNING);
+    broadcast_set_game_status(state, GAME_RUNNING);
 
     // 2. broadcast MAP
     broadcast_map(state);

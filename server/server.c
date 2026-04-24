@@ -212,7 +212,7 @@ int add_client(server_state_t *state, int fd)
     p->ready = false;
     p->last_move_tick = 0;
     p->speed = state->map->configs.player_speed;
-    p->bomb_count = 10; // TODO: idk what bomb count to start with
+    p->bomb_count = START_BOMB_COUNT;
     p->bomb_radius = state->map->configs.explosion_radius;
     p->bomb_timer_ticks = state->map->configs.bomb_timer_ticks;
     p->row = state->map->configs.start_row[free_idx];
