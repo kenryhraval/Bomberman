@@ -11,7 +11,7 @@ void *client_loop(void *args)
     int fd = state->clients[idx].fd;
     msg_generic_t header;
 
-    while (read_exact(fd, &header, sizeof(header)) > 0)
+    while (read_exact(fd, &header, sizeof(header)) == 0)
     {
         pthread_mutex_lock(&state->mutex);
 
@@ -30,10 +30,11 @@ void *client_loop(void *args)
             broadcast_set_ready(state, idx);
 
             // check if all player ready to start game
-            if (all_players_ready(state))
+            if (state->game_status == GAME_LOBBY && all_players_ready(state))
             {
                 start_game(state);
             }
+
             break;
         }
 
@@ -220,17 +221,21 @@ void broadcast_sync_board(server_state_t *state)
     }
 }
 
+
 bool all_players_ready(server_state_t *state)
 {
+    if (state->player_count < 2)
+        return false;
+
     for (int i = 0; i < MAX_PLAYERS; i++)
     {
         if (state->clients[i].connected && !state->clients[i].player.ready)
-        {
             return false;
-        }
     }
+
     return true;
 }
+
 
 void start_game(server_state_t *state)
 {
