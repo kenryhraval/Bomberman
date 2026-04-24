@@ -175,3 +175,59 @@ int send_ping(int fd, uint8_t sender_id, uint8_t target_id) {
     }
     return 0;
 }
+
+
+int send_map(int fd, uint8_t sender_id, uint8_t target_id,
+             const msg_map_t *msg, const uint8_t *cells)
+{
+    msg_generic_t header = {
+        .msg_type = MSG_MAP,
+        .sender_id = sender_id,
+        .target_id = target_id
+    };
+
+    uint16_t cell_count = msg->height * msg->width;
+
+    if (write_exact(fd, &header, sizeof(header)) < 0) return -1;
+    if (write_exact(fd, msg, sizeof(*msg)) < 0) return -1;
+    if (write_exact(fd, cells, cell_count) < 0) return -1;
+
+    return 0;
+}
+
+
+int send_move_attempt(int fd, uint8_t sender_id, uint8_t target_id,
+                      const msg_move_attempt_t *msg)
+{
+    msg_generic_t header = {
+        .msg_type = MSG_MOVE_ATTEMPT,
+        .sender_id = sender_id,
+        .target_id = target_id
+    };
+
+    if (write_exact(fd, &header, sizeof(header)) < 0)
+        return -1;
+
+    if (write_exact(fd, msg, sizeof(*msg)) < 0)
+        return -1;
+
+    return 0;
+}
+
+
+int send_moved(int fd, uint8_t sender_id, uint8_t target_id, const msg_moved_t *msg)
+{
+    msg_generic_t header = {
+        .msg_type = MSG_MOVED,
+        .sender_id = sender_id,
+        .target_id = target_id
+    };
+
+    if (write_exact(fd, &header, sizeof(header)) < 0)
+        return -1;
+
+    if (write_exact(fd, msg, sizeof(*msg)) < 0)
+        return -1;
+
+    return 0;
+}

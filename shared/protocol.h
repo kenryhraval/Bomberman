@@ -29,6 +29,11 @@ typedef struct PACKED {
 } msg_winner_t;
 
 typedef struct PACKED {
+    uint8_t height;
+    uint8_t width;
+} msg_map_t;
+
+typedef struct PACKED {
     uint8_t direction;   /* 'U', 'D', 'L', 'R' */
 } msg_move_attempt_t;
 
@@ -192,7 +197,19 @@ Atbilde uz PING ziņu
 */
 int send_pong(int fd, uint8_t sender_id, uint8_t target_id);
 
+/*
+Šo ziņu serveris sūta klientiem ar tekošo kartes informāciju. W=width, H=height. Katrai
+šūnai viens baits, līdzīgi kā kartes konfigurācijas failā.
+*/
+int send_map(int fd, uint8_t sender_id, uint8_t target_id, const msg_map_t *msg, const uint8_t *cells);
 
+/*
+Šo ziņu klients sūta serverim, ja viņš vēlas paiet kaut kādā virzienā. Viņš nosūta savu
+spēlētāja ID un kustības virzienu, kurā viņš vēlas iet. Ja tur var iet, tad serveris nosūta
+tālāk visiem klientiem “MOVE”.
+Kustības virziens ir kodēts kā ASCII simbols: U-up, D-dowm, L-left, R-right.
+*/
+int send_move_attempt(int fd, uint8_t sender_id, uint8_t target_id, const msg_move_attempt_t *msg);
 
 #endif
 

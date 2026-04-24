@@ -16,6 +16,26 @@
 #define MAX_CLIENT_ID_LEN 19
 #define SERVER 255
 #define BROADCAST 254
+#define MAX_MAP_ROWS 255
+#define MAX_MAP_COLS 255
+
+typedef enum {
+    HARD_BLOCK = 'H',
+    SOFT_BLOCK = 'S',
+    EMPTY = '.',
+    BOMB = 'B',
+    SPEED_BONUS = 'A',
+    BOMB_RADIUS_BONUS = 'R',
+    BOMB_TIMER_BONUS = 'T',
+    PLAYER_1 = '1',
+    PLAYER_LAST = '1' + MAX_PLAYERS - 1,
+} cell_type_t;
+
+typedef struct {
+    uint8_t rows;
+    uint8_t cols;
+    uint8_t cells[MAX_MAP_ROWS * MAX_MAP_COLS];
+} map_t;
 
 typedef enum
 {
