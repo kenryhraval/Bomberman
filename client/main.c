@@ -15,31 +15,34 @@ static void draw_lobby(const client_state_t *client)
 {
     erase();
 
+    player_t me = client->players[client->my_id];
+
     mvprintw(0, 0, "Bomberman");
     mvprintw(2, 0, "Jauna spēle: jūs esat priekšnamā!");
 
-    if (!client->ready) {
+    if (!me.ready)
         mvprintw(4, 0, "Spied 'R', lai paziņotu gatavību");
-    } else {
+    else
         mvprintw(4, 0, "Esat gatavs! Gaidiet citus spēlētājus...");
-    }
 
     mvprintw(6, 0, "Spēlētāji:");
 
-    // yourself
-    attron(COLOR_PAIR(client->ready ? 1 : 2));
-    mvprintw(8, 0, "[1] %s", client->name);
-    attroff(COLOR_PAIR(client->ready ? 1 : 2));
+    int row = 8;
+    for (int id = 0; id < MAX_PLAYERS; id++) {
+        if (client->players[id].name[0] == '\0')
+            continue;
 
-    // others
-    for (int i = 0; i < client->welcome.other_count; i++) {
-        attron(COLOR_PAIR(client->welcome.others[i].ready ? 1 : 2));
-        mvprintw(9 + i, 0, "[%u] %s", i + 2, client->welcome.others[i].name);
-        attroff(COLOR_PAIR(client->welcome.others[i].ready ? 1 : 2)); 
+        attron(COLOR_PAIR(client->players[id].ready ? 1 : 2));
+        mvprintw(row, 0, "[%u] %s%s",
+                 client->players[id].id,
+                 client->players[id].name,
+                 id == client->my_id ? " (jūs)" : "");
+        attroff(COLOR_PAIR(client->players[id].ready ? 1 : 2));
+
+        row++;
     }
 
     mvprintw(18, 0, "Spied 'X', lai pamestu spēli");
-
     refresh();
 }
 
@@ -66,27 +69,29 @@ int main(int argc, char *argv[])
     const char *ip = DEFAULT_IP;
     int port = DEFAULT_PORT;
     
-    client_state_t client = {0};
+    client_state_t game_state = {0};
 
     if (argc >= 2) ip = argv[1]; 
     if (argc >= 3) port = atoi(argv[2]);
 
+    char player_name[MAX_NAME_LEN + 1] = {0};
+
     printf("Ievadiet lietotājvārdu: ");
     fflush(stdout);
-    if (fgets(client.name, sizeof(client.name), stdin) == NULL) {
+    if (fgets(player_name, sizeof(player_name), stdin) == NULL) {
         printf("Failed to read player name\n");
         return 1;
     }
-    client.name[strcspn(client.name, "\n")] = '\0';
+    player_name[strcspn(player_name, "\n")] = '\0';
 
-    if (client_connect(&client, ip, port) < 0) {
+    if (client_connect(&game_state, ip, port) < 0) {
         printf("Failed to connect\n");
         return 1;
     }
 
-    if (client_handshake(&client) < 0) {
+    if (client_handshake(&game_state, player_name) < 0) {
         printf("Handshake failed\n");
-        client_close(&client);
+        client_close(&game_state);
         return 1;
     }
 
@@ -103,42 +108,45 @@ int main(int argc, char *argv[])
 
     int running = 1;
     while (running) {
-        if (client_poll_network(&client) < 0) {
+        if (client_poll_network(&game_state) < 0) {
             running = 0;
             break;
         }
 
-        switch (client.welcome.game_status) {
+        switch (game_state.game_status) {
             case GAME_LOBBY:
-                draw_lobby(&client);
+                draw_lobby(&game_state);
                 break;
 
             case GAME_RUNNING:
-                draw_running(&client);
+                draw_running(&game_state);
                 break;
 
             case GAME_END:
-                draw_end(&client);
+                draw_end(&game_state);
                 break;
         }
 
         int ch = getch();
         switch (ch) {
             case 'x':
+            case 'X':
                 running = 0;
                 break;
             case 'r':
-                if (client.ready == 0) {
-                    client.ready = 1;
-                    send_set_ready(client.fd, client.my_id, SERVER);
+            case 'R':
+                if (!game_state.players[game_state.my_id].ready) {
+                    game_state.players[game_state.my_id].ready = true;
+                    send_set_ready(game_state.fd, game_state.my_id, SERVER);
                 }
+                break;
         }
     }
 
     endwin();
 
-    client_send_leave(&client);
-    client_close(&client);
+    client_send_leave(&game_state);
+    client_close(&game_state);
     return 0;
 }
 
