@@ -158,7 +158,7 @@ void explode(server_state_t *state, int bomb_idx)
             state->explosions[i].row = bomb->row;
             state->explosions[i].col = bomb->col;
             state->explosions[i].radius = bomb->radius;
-            state->explosions[i].duration_ticks = state->map->configs.explosion_duration_ticks;
+            state->explosions[i].duration_ticks = state->config->explosion_duration_ticks;
             break;
         }
     }

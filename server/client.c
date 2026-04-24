@@ -296,11 +296,11 @@ void start_game(server_state_t *state)
             continue;
         player_t *p = &state->clients[i].player;
         p->alive = true;
-        p->row = state->map->configs.start_row[i];
-        p->col = state->map->configs.start_col[i];
+        p->row = state->config->start_row[i];
+        p->col = state->config->start_col[i];
         p->bomb_count = START_BOMB_COUNT;
-        p->bomb_radius = state->map->configs.explosion_radius;
-        p->bomb_timer_ticks = state->map->configs.bomb_timer_ticks;
+        p->bomb_radius = state->config->explosion_radius;
+        p->bomb_timer_ticks = state->config->bomb_timer_ticks;
 
         // set last_move_tick so that first player move is allowed immediately at game start
         if (p->speed > 0)

@@ -24,7 +24,7 @@ int player_name_in_use(const server_state_t *state, const char *name)
     return 0;
 }
 
-int serve_main(map_t *map, const config_t *config)
+int serve_main(map_t *map, config_t *config)
 {
     int server_fd, client_fd;
     struct sockaddr_in remote_address;
