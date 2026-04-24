@@ -33,23 +33,43 @@ int client_connect(client_state_t *client, const char *ip, int port)
     return 0;
 }
 
-int client_handshake(client_state_t *client)
+int client_handshake(client_state_t *client, const char *player_name)
 {
     msg_hello_t hello = {0};
     msg_generic_t header;
+    msg_welcome_t welcome;
 
     snprintf(hello.client_id, sizeof(hello.client_id), "bomb-client-0.1");
-    snprintf(hello.player_name, sizeof(hello.player_name), "%s", client->name);
+    snprintf(hello.player_name, sizeof(hello.player_name), "%s", player_name);
 
-    if (send_hello(client->fd, 255, 255, &hello) < 0) {
+    if (send_hello(client->fd, 255, 255, &hello) < 0)
         return -1;
-    }
 
-    if (recv_welcome(client->fd, &header, &client->welcome) < 0) {
+    if (recv_welcome(client->fd, &header, &welcome) < 0)
         return -1;
-    }
 
     client->my_id = header.target_id;
+    client->game_status = welcome.game_status;
+
+    strncpy(client->server_id, welcome.server_id, MAX_CLIENT_ID_LEN);
+    client->server_id[MAX_CLIENT_ID_LEN] = '\0';
+
+    client->player_count = 1 + welcome.other_count;
+
+    client->players[client->my_id].id = client->my_id;
+    strncpy(client->players[client->my_id].name, player_name, MAX_NAME_LEN);
+    client->players[client->my_id].name[MAX_NAME_LEN] = '\0';
+    client->players[client->my_id].ready = false;
+
+    for (int i = 0; i < welcome.other_count; i++) {
+        uint8_t id = welcome.others[i].player_id;
+
+        client->players[id].id = id;
+        client->players[id].ready = welcome.others[i].ready;
+        strncpy(client->players[id].name, welcome.others[i].name, MAX_NAME_LEN);
+        client->players[id].name[MAX_NAME_LEN] = '\0';
+    }
+
     return 0;
 }
 
@@ -90,12 +110,44 @@ int client_poll_network(client_state_t *client)
         }
 
         if (header.msg_type == MSG_WELCOME) {
-            if (read_exact(client->fd, &client->welcome, sizeof(client->welcome)) < 0) {
+            msg_welcome_t welcome;
+
+            if (read_exact(client->fd, &welcome, sizeof(welcome)) < 0)
                 return -1;
-            }
 
             client->my_id = header.target_id;
-            
+            client->game_status = welcome.game_status;
+
+            strncpy(client->server_id, welcome.server_id, MAX_CLIENT_ID_LEN);
+            client->server_id[MAX_CLIENT_ID_LEN] = '\0';
+
+            for (int i = 0; i < welcome.other_count; i++) {
+                uint8_t id = welcome.others[i].player_id;
+
+                client->players[id].id = id;
+                client->players[id].ready = welcome.others[i].ready;
+                strncpy(client->players[id].name, welcome.others[i].name, MAX_NAME_LEN);
+                client->players[id].name[MAX_NAME_LEN] = '\0';
+            }
+
+        } else if (header.msg_type == MSG_HELLO) {
+            msg_hello_t hello;
+
+            if (read_exact(client->fd, &hello, sizeof(hello)) < 0)
+                return -1;
+
+            uint8_t id = header.sender_id;
+
+            if (client->players[id].name[0] == '\0')
+                client->player_count++;
+
+            client->players[id].id = id;
+            client->players[id].ready = false;
+            strncpy(client->players[id].name, hello.player_name, MAX_NAME_LEN);
+            client->players[id].name[MAX_NAME_LEN] = '\0';
+        } else if (header.msg_type == MSG_SET_READY) {
+            uint8_t id = header.sender_id;
+            client->players[id].ready = true;
         } else {
             // later: handle more message types
             return 0;

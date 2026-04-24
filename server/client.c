@@ -105,7 +105,9 @@ void broadcast_hello(server_state_t *state, int sender_idx, const msg_hello_t *h
     {
         if (state->clients[i].connected && i != sender_idx)
         {
-            send_hello(state->clients[i].fd, SERVER, state->clients[sender_idx].player.id, hello);
+            // vienīgais veids, kā nodot jaunā sender_idx, 
+            // ir iestatot sender_id kā apraides avotu
+            send_hello(state->clients[i].fd, sender_idx, BROADCAST, hello);
         }
     }
 }
