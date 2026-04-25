@@ -618,35 +618,40 @@ void handle_move(server_state_t *state, event_t *ev)
             // broadcast bonus collected
             broadcast_bonus_collected(state, p->id, make_cell_index(new_row, new_col, state->map.cols));
 
-            state->bonuses = bonus_cleanup(state->bonuses, state->bonus_count);
+            bonus_cleanup(&state->bonuses, &state->bonus_count);
 
             break;
         }
     }
 }
 
-bonus_t* bonus_cleanup(bonus_t *bonuses, size_t bonus_count)
+void bonus_cleanup(bonus_t **bonuses, size_t *bonus_count)
 {
     //move all inactive bonuses to the end of the array 
     size_t j = 0;
-    for (size_t i = 0; i < bonus_count; i++)
+    for (size_t i = 0; i < *bonus_count; i++)
     {
-        if (bonuses[i].active)
+        if ((*bonuses)[i].active)
         {
             if (i != j)
-                bonuses[j] = bonuses[i];
+                (*bonuses)[j] = (*bonuses)[i];
             j++;
         }
     }
 
+    if (j == *bonus_count || j == 0)
+        return;
+
     // clear remaining slots
-    bonus_t *new_bonuses = realloc(bonuses, j * sizeof(bonus_t));
+    bonus_t *new_bonuses = realloc(*bonuses, j * sizeof(bonus_t));
     if (new_bonuses == NULL)
     {
         perror("Failed to reallocate memory for bonuses");
         exit(EXIT_FAILURE);
     }
-    return new_bonuses;
+
+    *bonuses = new_bonuses;
+    *bonus_count = j;
 }
 
 void broadcast_bonus_collected(server_state_t *state, uint8_t player_id, uint16_t cell)

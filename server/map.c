@@ -44,7 +44,6 @@ int load_map(const char *filename, server_state_t *server_state)
                 server_state->bonuses[server_state->bonus_count].col = c;
                 server_state->bonuses[server_state->bonus_count].type = (bonus_type_t)cell;
                 server_state->bonus_count++;
-                server_state->bonus_count++;
             }
 
             // if player position, save it to configs and set cell to empty
