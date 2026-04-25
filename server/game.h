@@ -1,8 +1,6 @@
 #pragma once
 #include "server.h"
 
-#define TICK_RATE 20 // 20 ticks per second => 50ms per tick
-
 void *game_loop(void *arg);
 
 void game_tick(void *arg);

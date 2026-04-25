@@ -455,6 +455,9 @@ void handle_move(server_state_t *state, event_t *ev)
             continue;
         if (i == ev->player_id)
             continue;
+        // skip dead players
+        if (!state->clients[i].player.alive)
+            continue;
         if (state->clients[i].player.row == new_row &&
             state->clients[i].player.col == new_col)
             return;
