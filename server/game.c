@@ -88,6 +88,9 @@ void game_tick(void *arg)
                                     state->explosions[i].row,
                                     state->explosions[i].col,
                                     state->explosions[i].radius);
+            free(state->explosions[i].footprint);
+            state->explosions[i].footprint = NULL;
+            state->explosions[i].footprint_size = 0;
         }
     }
 }
@@ -137,7 +140,46 @@ void maybe_spawn_bonus(server_state_t *state, uint16_t row, uint16_t col)
 {
 }
 
-void calculate_explosion_footprint(
+void calculate_explosion_footprint(server_state_t *state, explosion_t *expl)
+{   
+    // explosion footprint always includes the center cell
+    int idx = 0;
+    expl->footprint[idx++] = make_cell_index(expl->row, expl->col, state->map->cols);
+    
+    // bomb propagation directions
+    int dirs[4][2] = {{-1, 0}, {1, 0}, {0, -1}, {0, 1}};
+
+    // propagate explosion in 4 directions to calculate footprint
+    for (int d = 0; d < 4; d++)
+    {   
+        // propagate explosion in this direction until we reach max radius or hit a block
+        for (int r = 1; r <= expl->radius; r++)
+        {
+            // calculate explosion cell coordinates
+            int row = (int)expl->row + dirs[d][0] * r;
+            int col = (int)expl->col + dirs[d][1] * r;
+
+            // check map bounds
+            if (row < 0 || row >= state->map->rows ||
+                col < 0 || col >= state->map->cols)
+                break;
+            
+            // get cell type
+            uint8_t cell = state->map->cells[make_cell_index((uint16_t)row, (uint16_t)col, state->map->cols)];
+
+            if (cell == HARD_BLOCK)
+                break;
+            
+            expl->footprint[idx++] = make_cell_index((uint16_t)row, (uint16_t)col, state->map->cols);
+
+            // if we hit a soft block or bomb, explosion stops but it still affects that cell
+            if (cell == SOFT_BLOCK || cell == BOMB)
+                break;
+        }
+    }
+
+    expl->footprint_size = idx;
+}
 
 void explode(server_state_t *state, int bomb_idx)
 {
@@ -166,7 +208,7 @@ void explode(server_state_t *state, int bomb_idx)
 
             calculate_explosion_footprint(state, &state->explosions[i]);
 
-            state->explosions[i].duration_ticks = state->map->configs.explosion_duration_ticks;
+            state->explosions[i].duration_ticks = state->config->explosion_duration_ticks;
             break;
         }
     }
@@ -405,49 +447,6 @@ void handle_bomb(server_state_t *state, event_t *ev)
     broadcast_bomb(state, ev->player_id, ev->data.cell);
 }
 
-bool is_cell_hit_by_explosion(server_state_t *state,
-                                     explosion_t *expl,
-                                     uint16_t target_row,
-                                     uint16_t target_col)
-{
-    // center cell is always part of explosion
-    if (expl->row == target_row && expl->col == target_col)
-        return true;
-
-    // explosion is cross-shaped 
-    // ignore cells not aligned with center
-    if (expl->row != target_row && expl->col != target_col)
-        return false;
-
-    // check cells between explosion center and target cell for blocks that would stop the explosion
-    int step_row = 0;
-    int step_col = 0;
-    if (expl->row == target_row)
-        step_col = (target_col > expl->col) ? 1 : -1;
-    else
-        step_row = (target_row > expl->row) ? 1 : -1;
-
-    for (int dist = 1; dist <= expl->radius; dist++)
-    {
-        int row = (int)expl->row + step_row * dist;
-        int col = (int)expl->col + step_col * dist;
-
-        if (row < 0 || row >= state->map->rows ||
-            col < 0 || col >= state->map->cols)
-            break;
-
-        uint8_t cell = state->map->cells[make_cell_index((uint16_t)row, (uint16_t)col, state->map->cols)];
-
-        if ((uint16_t)row == target_row && (uint16_t)col == target_col)
-            return true;
-
-        if (cell == HARD_BLOCK || cell == SOFT_BLOCK || cell == BOMB)
-            break;
-    }
-
-    return false;
-}
-
 void handle_move(server_state_t *state, event_t *ev)
 {
     client_t *client = &state->clients[ev->player_id];
@@ -517,12 +516,17 @@ void handle_move(server_state_t *state, event_t *ev)
         if (!state->explosions[i].active)
             continue;
 
-        if (is_cell_hit_by_explosion(state, &state->explosions[i], new_row, new_col))
+        // check explosion footprint for target cell
+        for (size_t j = 0; j < state->explosions[i].footprint_size; j++)
         {
-            p->alive = false;
-            broadcast_death(state, p->id);
-            check_win_condition(state);
-            return;
+            if (state->explosions[i].footprint[j] == make_cell_index(new_row, new_col, state->map->cols))
+            {
+                // player moves into explosion and dies
+                p->alive = false;
+                broadcast_death(state, p->id);
+                check_win_condition(state);
+                return;
+            }
         }
     }
 
