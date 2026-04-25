@@ -639,7 +639,15 @@ void bonus_cleanup(bonus_t **bonuses, size_t *bonus_count)
         }
     }
 
-    if (j == *bonus_count || j == 0)
+    if (j == 0)
+    {
+        free(*bonuses);
+        *bonuses = NULL;
+        *bonus_count = 0;
+        return;
+    }
+
+    if (j == *bonus_count)
         return;
 
     // clear remaining slots

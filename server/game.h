@@ -24,4 +24,4 @@ void check_player_deaths(server_state_t *state, uint16_t row, uint16_t col);
 void check_win_condition(server_state_t *state);
 
 void maybe_spawn_bonus(server_state_t *state, uint16_t row, uint16_t col);
-bonus_t* bonus_cleanup(bonus_t *bonuses, size_t bonus_count);
+void bonus_cleanup(bonus_t **bonuses, size_t *bonus_count);
