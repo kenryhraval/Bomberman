@@ -10,15 +10,6 @@
 #define DEFAULT_PORT 6969
 #define FPS 20
 
-static void send_move(client_state_t *state, uint8_t direction)
-{
-    msg_move_attempt_t move = {
-        .direction = direction
-    };
-
-    send_move_attempt(state->fd, state->my_id, SERVER, &move);
-}
-
 
 static void draw_lobby(const client_state_t *state)
 {
@@ -66,13 +57,18 @@ static void draw_running(const client_state_t *state)
     int start_col = 2;
 
     for (int r = 0; r < state->map.rows; r++) {
-        for (int c = 0; c < state->map.cols; c++) {
-            uint16_t idx = make_cell_index(r, c, state->map.cols);
-            char cell = state->map.cells[idx];
+    for (int c = 0; c < state->map.cols; c++) {
+        uint16_t idx = make_cell_index(r, c, state->map.cols);
 
-            mvprintw(start_row + r, start_col + c * 2, "%c", cell);
+        char cell = state->map.cells[idx];
+
+        if (state->overlay_map.cells[idx] != EMPTY) {
+            cell = state->overlay_map.cells[idx];
         }
+
+        mvprintw(start_row + r, start_col + c * 2, "%c", cell);
     }
+}
 
     for (int i = 0; i < MAX_PLAYERS; i++) {
         if (state->players[i].name[0] == '\0')
@@ -95,7 +91,8 @@ static void draw_running(const client_state_t *state)
 static void draw_end(const client_state_t *state)
 {
     erase();
-
+    mvprintw(0, 0, "Bomberman");
+    mvprintw(2, 0, "Spēle beigusies: uzvarēja %s", state->players[state->winner_id].name);
     refresh();
 }
 
@@ -184,31 +181,37 @@ int main(int argc, char *argv[])
             case 'W':
             case KEY_UP:
                 if (state.game_status == GAME_RUNNING)
-                    send_move(&state, DIR_UP);
+                    send_move_attempt(state.fd, state.my_id, DIR_UP);
                 break;
 
             case 's':
             case 'S':
             case KEY_DOWN:
                 if (state.game_status == GAME_RUNNING)
-                    send_move(&state, DIR_DOWN);
+                    send_move_attempt(state.fd, state.my_id, DIR_DOWN);
                 break;
 
             case 'a':
             case 'A':
             case KEY_LEFT:
                 if (state.game_status == GAME_RUNNING)
-                    send_move(&state, DIR_LEFT);
+                    send_move_attempt(state.fd, state.my_id, DIR_LEFT);
                 break;
 
             case 'd':
             case 'D':
             case KEY_RIGHT:
                 if (state.game_status == GAME_RUNNING)
-                    send_move(&state, DIR_RIGHT);
+                    send_move_attempt(state.fd, state.my_id, DIR_RIGHT);
                 break;
-                }
-            }
+
+            case 'b':
+            case 'B':
+                if (state.game_status == GAME_RUNNING)
+                    send_bomb_attempt(state.fd, state.my_id, state.players[state.my_id].row, state.players[state.my_id].col, state.map.cols);
+                break;
+        }
+    }
 
     endwin();
 

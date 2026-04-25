@@ -209,7 +209,22 @@ spēlētāja ID un kustības virzienu, kurā viņš vēlas iet. Ja tur var iet, 
 tālāk visiem klientiem “MOVE”.
 Kustības virziens ir kodēts kā ASCII simbols: U-up, D-dowm, L-left, R-right.
 */
-int send_move_attempt(int fd, uint8_t sender_id, uint8_t target_id, const msg_move_attempt_t *msg);
+int send_move_attempt(int fd, uint8_t sender_id, uint8_t direction);
+
+/*
+Šo ziņu serveris sūta visiem klientiem, lai informētu, ka kāds spēlētājs ir pakustējies uz
+jaunu šūnu.
+*/
+int send_moved(int fd, uint8_t sender_id, uint8_t target_id, const msg_moved_t *msg);
+
+/*
+Šo ziņu klients sūta serverim, ja viņš vēlas nolikt spridzekli. Serveris pārbauda, un, ja var,
+nosūta visiem klientiem “BOMB” paketi.
+*/
+int send_bomb_attempt(int fd, uint8_t sender_id, const uint16_t row, const uint16_t col, const uint16_t map_cols);
+
+
+
 
 #endif
 

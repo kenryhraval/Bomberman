@@ -1,10 +1,11 @@
-#include "client.h"
-
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <poll.h>
+
+#include "client.h"
+#include "helpers.h"
 
 int client_connect(client_state_t *state, const char *ip, int port)
 {
@@ -102,11 +103,11 @@ int client_poll_network(client_state_t *state)
 
     int ret = poll(&pfd, 1, 0);
     if (ret < 0) {
-        return -1;
+        return -1; // kļūda poll izsaukumā
     }
 
     if (ret == 0) {
-        return 0; // no new data
+        return 0; // nav datu lasīšanai
     }
 
     if (pfd.revents & POLLIN) {
@@ -115,7 +116,7 @@ int client_poll_network(client_state_t *state)
         } 
 
         if (header.target_id != state->my_id && header.target_id != BROADCAST) {
-            return -1; // message not intended for us
+            return -1; // ziņa nav domāta šim klientam
         }
 
         if (header.msg_type == MSG_HELLO) {
@@ -157,17 +158,23 @@ int client_poll_network(client_state_t *state)
             msg_map_t payload;
             if (read_exact(state->fd, &payload, sizeof(payload)) < 0)
                 return -1;
-
-            if (payload.width > MAX_MAP_COLS || payload.height > MAX_MAP_ROWS)
-                return -1;
             
             uint16_t cell_count = payload.height * payload.width;
 
+            if (cell_count > MAX_MAP_ROWS * MAX_MAP_COLS)
+                return -1;
+
+            // sagatavo pamatkarti
             state->map.rows = payload.height;
             state->map.cols = payload.width;
 
             if (read_exact(state->fd, state->map.cells, cell_count) < 0)
                 return -1;
+
+            // sagatavo pārklājuma karti
+            state->overlay_map.rows = payload.height;
+            state->overlay_map.cols = payload.width;
+            memset(state->overlay_map.cells, EMPTY, cell_count);
 
         } else if (header.msg_type == MSG_WINNER) {
             msg_winner_t payload;
@@ -189,8 +196,80 @@ int client_poll_network(client_state_t *state)
             state->players[id].row = cell / state->map.cols;
             state->players[id].col = cell % state->map.cols;
             
-        } else {
+        } else if (header.msg_type == MSG_BOMB) {
+            msg_bomb_t bomb;
 
+            if (read_exact(state->fd, &bomb, sizeof(bomb)) < 0)
+                return -1;
+
+            uint16_t cell = ntohs(bomb.cell);
+            // atzīmē bumbu uz pamatkartes
+            state->map.cells[cell] = BOMB;
+           
+        } else if (header.msg_type == MSG_EXPLOSION_START) {
+            msg_explosion_start_t explosion;
+
+            if (read_exact(state->fd, &explosion, sizeof(explosion)) < 0)
+                return -1;
+
+            uint16_t cell = ntohs(explosion.cell);
+            uint8_t radius = explosion.radius;
+            // atzīmē sprādziena efektu pārklājuma kartē
+            mark_explosion(state, cell, radius, 'X');
+
+        } else if (header.msg_type == MSG_EXPLOSION_END) {
+            msg_explosion_end_t explosion;
+
+            if (read_exact(state->fd, &explosion, sizeof(explosion)) < 0)
+                return -1;
+
+            uint16_t cell = ntohs(explosion.cell);
+            uint8_t radius = explosion.radius;
+            // noņem sprādziena efektu pārklājuma kartē
+            mark_explosion(state, cell, radius, EMPTY);
+            // noņem bumbu no pamatkartes
+            state->map.cells[cell] = EMPTY;
+
+        } else if (header.msg_type == MSG_DEATH) {
+            msg_death_t death;
+
+            if (read_exact(state->fd, &death, sizeof(death)) < 0)
+                return -1;
+
+            uint8_t id = death.player_id;
+            state->players[id].alive = false;
+
+        } else if (header.msg_type == MSG_BONUS_AVAILABLE) {
+            msg_bonus_available_t bonus;
+
+            if (read_exact(state->fd, &bonus, sizeof(bonus)) < 0)
+                return -1;
+
+            // atzīmē pieejamo bonusu uz pamatkartes
+            uint16_t cell = ntohs(bonus.cell);
+            state->map.cells[cell] = bonus.bonus_type;
+
+        } else if (header.msg_type == MSG_BONUS_RETRIEVED) {
+            msg_bonus_retrieved_t bonus;
+
+            if (read_exact(state->fd, &bonus, sizeof(bonus)) < 0)
+                return -1;
+
+            uint16_t cell = ntohs(bonus.cell);
+            // atzīmē, ka paņemto bonusu uz pamatkartes
+            state->map.cells[cell] = EMPTY;
+
+        } else if (header.msg_type == MSG_BLOCK_DESTROYED) {
+            msg_block_destroyed_t block;
+
+            if (read_exact(state->fd, &block, sizeof(block)) < 0)
+                return -1;
+
+            uint16_t cell = ntohs(block.cell);
+            // atzīmē iznīcināto bloku uz pamatkartes
+            state->map.cells[cell] = EMPTY;
+
+        } else {
             return -1; // unknown message type
         }
     }

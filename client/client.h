@@ -12,8 +12,11 @@ typedef struct {
     uint8_t player_count;
     player_t players[MAX_PLAYERS];
     map_t map;
+    map_t overlay_map;
     uint8_t winner_id;
 } client_state_t;
+
+#define EXPLOSION_CELL 'X'
 
 int client_connect(client_state_t *state, const char *ip, int port);
 int client_handshake(client_state_t *state, const char *player_name);
