@@ -197,8 +197,8 @@ void broadcast_set_game_status(server_state_t *state, game_status_t status)
 void broadcast_map(server_state_t *state)
 {
     msg_map_t map_msg = {
-        .height = state->map->rows,
-        .width = state->map->cols
+        .height = state->map.rows,
+        .width = state->map.cols
     };
 
     for (int i = 0; i < MAX_PLAYERS; i++)
@@ -207,7 +207,7 @@ void broadcast_map(server_state_t *state)
             continue;
 
         // abstrakcijai visur vajadzētu send_x izmantot
-        send_map(state->clients[i].fd, SERVER, BROADCAST, &map_msg, state->map->cells);
+        send_map(state->clients[i].fd, SERVER, BROADCAST, &map_msg, state->map.cells);
     }
 }
 
@@ -292,11 +292,11 @@ void start_game(server_state_t *state)
             continue;
         player_t *p = &state->clients[i].player;
         p->alive = true;
-        p->row = state->config->start_row[i];
-        p->col = state->config->start_col[i];
+        p->row = state->config.start_row[i];
+        p->col = state->config.start_col[i];
         p->bomb_count = START_BOMB_COUNT;
-        p->bomb_radius = state->config->explosion_radius;
-        p->bomb_timer_ticks = state->config->bomb_timer_ticks;
+        p->bomb_radius = state->config.explosion_radius;
+        p->bomb_timer_ticks = state->config.bomb_timer_ticks;
 
         // set last_move_tick so that first player move is allowed immediately at game start
         if (p->speed > 0)
@@ -325,7 +325,7 @@ void start_game(server_state_t *state)
             continue;
 
         player_t *p = &state->clients[i].player;
-        uint16_t cell = make_cell_index(p->row, p->col, state->map->cols);
+        uint16_t cell = make_cell_index(p->row, p->col, state->map.cols);
 
         broadcast_moved(state, p->id, cell);
     }

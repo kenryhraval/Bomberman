@@ -1,6 +1,9 @@
 #pragma once
 #include <stdint.h>
-#include "../shared/common.h"
+#include "shared/common.h"
+
+// forward declaration to avoid circular dependency with server.h
+typedef struct server_state server_state_t;
 
 typedef struct {
     uint16_t player_speed;
@@ -11,4 +14,4 @@ typedef struct {
     uint16_t start_col[MAX_PLAYERS];
 } config_t;
 
-int load_map(const char *filename, map_t *map, config_t *config);
+int load_map(const char *filename, server_state_t *server_state);

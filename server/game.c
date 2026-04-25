@@ -3,6 +3,7 @@
 #include "game.h"
 #include "server.h"
 #include "handle_client.h"
+#include "configs.h"
 
 #include <time.h>
 #include <arpa/inet.h>
@@ -125,7 +126,7 @@ void broadcast_explosion_end(server_state_t *state, uint16_t row, uint16_t col, 
 
     msg_explosion_end_t payload = {
         .radius = radius,
-        .cell = htons(make_cell_index(row, col, state->map->cols))};
+        .cell = htons(make_cell_index(row, col, state->map.cols))};
 
     for (int i = 0; i < MAX_PLAYERS; i++)
     {
@@ -138,13 +139,54 @@ void broadcast_explosion_end(server_state_t *state, uint16_t row, uint16_t col, 
 
 void maybe_spawn_bonus(server_state_t *state, uint16_t row, uint16_t col)
 {
+    // check if bonus should spawn
+    double r = (double)(rand() % 100) / 100.0;
+    if (r < BLOCK_DESTROY_BONUS_CHANCE)
+    {
+        // spawn bonus at the destroyed cell
+        bonus_t new_bonus;
+        new_bonus.active = true;
+        new_bonus.row = row;
+        new_bonus.col = col;
+        int bonus_type = rand() % 4; // 4 bonus types
+        switch (bonus_type)
+        {
+        case 0:
+            new_bonus.type = BONUS_BOMB_COUNT;
+            break;
+        case 1:
+            new_bonus.type = BONUS_RADIUS;
+            break;
+        case 2:
+            new_bonus.type = BONUS_SPEED;
+            break;
+        case 3:
+            new_bonus.type = BONUS_TIMER;
+            break;
+        }
+
+        // realloc bonuses array and add new bonus
+        state->bonuses = realloc(state->bonuses, (state->bonus_count + 1) * sizeof(bonus_t));
+        if (state->bonuses == NULL)
+        {
+            perror("Failed to allocate memory for bonuses");
+            exit(EXIT_FAILURE);
+        }
+        state->bonuses[state->bonus_count] = new_bonus;
+        state->bonus_count++;
+
+        uint16_t bonus_cell = make_cell_index(row, col, state->map.cols);
+        state->map.cells[bonus_cell] = new_bonus.type;
+        broadcast_bonus_available(state, new_bonus.type, bonus_cell);
+
+    }
 }
 
 void calculate_explosion_footprint(server_state_t *state, explosion_t *expl)
 {   
     // explosion footprint always includes the center cell
     int idx = 0;
-    expl->footprint[idx++] = make_cell_index(expl->row, expl->col, state->map->cols);
+    expl->footprint[idx++] = make_cell_index(expl->row, expl->col, state->map.cols);
     
     // bomb propagation directions
     int dirs[4][2] = {{-1, 0}, {1, 0}, {0, -1}, {0, 1}};
@@ -160,17 +202,17 @@ void calculate_explosion_footprint(server_state_t *state, explosion_t *expl)
             int col = (int)expl->col + dirs[d][1] * r;
 
             // check map bounds
-            if (row < 0 || row >= state->map->rows ||
-                col < 0 || col >= state->map->cols)
+            if (row < 0 || row >= state->map.rows ||
+                col < 0 || col >= state->map.cols)
                 break;
             
             // get cell type
-            uint8_t cell = state->map->cells[make_cell_index((uint16_t)row, (uint16_t)col, state->map->cols)];
+            uint8_t cell = state->map.cells[make_cell_index((uint16_t)row, (uint16_t)col, state->map.cols)];
 
             if (cell == HARD_BLOCK)
                 break;
             
-            expl->footprint[idx++] = make_cell_index((uint16_t)row, (uint16_t)col, state->map->cols);
+            expl->footprint[idx++] = make_cell_index((uint16_t)row, (uint16_t)col, state->map.cols);
 
             // if we hit a soft block or bomb, explosion stops but it still affects that cell
             if (cell == SOFT_BLOCK || cell == BOMB)
@@ -187,7 +229,7 @@ void explode(server_state_t *state, int bomb_idx)
     bomb->active = false;
 
     // mark bomb cell as empty
-    state->map->cells[make_cell_index(bomb->row, bomb->col, state->map->cols)] = EMPTY;
+    state->map.cells[make_cell_index(bomb->row, bomb->col, state->map.cols)] = EMPTY;
     state->clients[bomb->owner_id].player.bomb_count++;
 
     // broadcast EXPLOSION_START to all clients
@@ -205,10 +247,15 @@ void explode(server_state_t *state, int bomb_idx)
 
             int max_cells_in_radius = bomb->radius * 4 + 1; // max cells in explosion footprint (cross-shaped)
             state->explosions[i].footprint = malloc(max_cells_in_radius * sizeof(uint16_t));
+            if (state->explosions[i].footprint == NULL)
+            {
+                perror("Failed to allocate memory for explosion footprint");
+                exit(EXIT_FAILURE);
+            }
 
             calculate_explosion_footprint(state, &state->explosions[i]);
 
-            state->explosions[i].duration_ticks = state->config->explosion_duration_ticks;
+            state->explosions[i].duration_ticks = state->clients[bomb->owner_id].player.bomb_explosion_duration_ticks;
             break;
         }
     }
@@ -229,13 +276,13 @@ void explode(server_state_t *state, int bomb_idx)
             int col = (int)bomb->col + dirs[d][1] * r;
 
             // check map bounds
-            if (row < 0 || row >= state->map->rows ||
-                col < 0 || col >= state->map->cols)
+            if (row < 0 || row >= state->map.rows ||
+                col < 0 || col >= state->map.cols)
                 break;
 
             // convert to cell index and check cell type
-            uint16_t idx = make_cell_index(row, col, state->map->cols);
-            uint8_t cell = state->map->cells[idx];
+            uint16_t idx = make_cell_index(row, col, state->map.cols);
+            uint8_t cell = state->map.cells[idx];
 
             // check cell type
             if (cell == HARD_BLOCK)
@@ -245,8 +292,8 @@ void explode(server_state_t *state, int bomb_idx)
             else if (cell == SOFT_BLOCK)
             {
                 // destroyes soft block
-                state->map->cells[idx] = EMPTY;
-                broadcast_block_destroyed(state, make_cell_index(row, col, state->map->cols));
+                state->map.cells[idx] = EMPTY;
+                broadcast_block_destroyed(state, make_cell_index(row, col, state->map.cols));
 
                 // check if bonus should spawn
                 maybe_spawn_bonus(state, row, col);
@@ -286,7 +333,7 @@ void broadcast_explosion_start(server_state_t *state, uint16_t row, uint16_t col
         .target_id = BROADCAST};
 
     msg_explosion_start_t payload = {
-        .cell = htons(make_cell_index(row, col, state->map->cols)),
+        .cell = htons(make_cell_index(row, col, state->map.cols)),
         .radius = radius};
 
     for (int i = 0; i < MAX_PLAYERS; i++)
@@ -404,15 +451,15 @@ void handle_bomb(server_state_t *state, event_t *ev)
     if (p->bomb_count == 0)
         return; // no bombs
 
-    uint16_t row = ev->data.cell / state->map->cols;
-    uint16_t col = ev->data.cell % state->map->cols;
+    uint16_t row = ev->data.cell / state->map.cols;
+    uint16_t col = ev->data.cell % state->map.cols;
 
     // player must be standing on the cell where they want to place the bomb
     if (p->row != row || p->col != col)
         return;
 
     // check if cell is already occupied by a bomb
-    uint8_t cell = state->map->cells[make_cell_index(row, col, state->map->cols)];
+    uint8_t cell = state->map.cells[make_cell_index(row, col, state->map.cols)];
     if (cell == BOMB)
         return;
 
@@ -438,7 +485,7 @@ void handle_bomb(server_state_t *state, event_t *ev)
     state->bombs[slot].timer_ticks = p->bomb_timer_ticks;
 
     // mark cell on map
-    state->map->cells[make_cell_index(row, col, state->map->cols)] = BOMB;
+    state->map.cells[make_cell_index(row, col, state->map.cols)] = BOMB;
 
     // reduce players bomb count
     p->bomb_count--;
@@ -490,11 +537,11 @@ void handle_move(server_state_t *state, event_t *ev)
     }
 
     // check map bounds
-    if (new_row >= state->map->rows || new_col >= state->map->cols)
+    if (new_row >= state->map.rows || new_col >= state->map.cols)
         return;
 
     // check cell type
-    uint8_t cell = state->map->cells[make_cell_index(new_row, new_col, state->map->cols)];
+    uint8_t cell = state->map.cells[make_cell_index(new_row, new_col, state->map.cols)];
     if (cell == HARD_BLOCK || cell == SOFT_BLOCK || cell == BOMB)
         return;
 
@@ -519,7 +566,7 @@ void handle_move(server_state_t *state, event_t *ev)
         // check explosion footprint for target cell
         for (size_t j = 0; j < state->explosions[i].footprint_size; j++)
         {
-            if (state->explosions[i].footprint[j] == make_cell_index(new_row, new_col, state->map->cols))
+            if (state->explosions[i].footprint[j] == make_cell_index(new_row, new_col, state->map.cols))
             {
                 // player moves into explosion and dies
                 p->alive = false;
@@ -536,7 +583,91 @@ void handle_move(server_state_t *state, event_t *ev)
     p->last_move_tick = state->current_tick;
 
     // broadcast MOVED
-    broadcast_move(state, ev->player_id, make_cell_index(new_row, new_col, state->map->cols));
+    broadcast_move(state, ev->player_id, make_cell_index(new_row, new_col, state->map.cols));
+
+    // check if player moved into a bonus
+    for (size_t i = 0; i < state->bonus_count; i++)
+    {
+        if (!state->bonuses[i].active)
+            continue;
+        if (state->bonuses[i].row == new_row && state->bonuses[i].col == new_col)
+        {
+            // apply bonus effect
+            switch (state->bonuses[i].type)
+            {
+            case BONUS_SPEED:
+                p->speed++;
+                break;
+            case BONUS_RADIUS:
+                p->bomb_radius++;
+                break;
+            case BONUS_TIMER:
+                p->bomb_explosion_duration_ticks += BOMB_EXPLOSION_BONUS_INCREASE_TICKS;
+                break;
+            case BONUS_BOMB_COUNT:
+                p->bomb_count++;
+                break;
+            default:
+                break;
+            }
+
+            // deactivate bonus
+            state->bonuses[i].active = false;
+            state->map.cells[make_cell_index(new_row, new_col, state->map.cols)] = EMPTY;
+
+            // broadcast bonus collected
+            broadcast_bonus_collected(state, p->id, make_cell_index(new_row, new_col, state->map.cols));
+
+            state->bonuses = bonus_cleanup(state->bonuses, state->bonus_count);
+
+            break;
+        }
+    }
+}
+
+bonus_t* bonus_cleanup(bonus_t *bonuses, size_t bonus_count)
+{
+    //move all inactive bonuses to the end of the array 
+    size_t j = 0;
+    for (size_t i = 0; i < bonus_count; i++)
+    {
+        if (bonuses[i].active)
+        {
+            if (i != j)
+                bonuses[j] = bonuses[i];
+            j++;
+        }
+    }
+
+    // clear remaining slots
+    bonus_t *new_bonuses = realloc(bonuses, j * sizeof(bonus_t));
+    if (new_bonuses == NULL)
+    {
+        perror("Failed to reallocate memory for bonuses");
+        exit(EXIT_FAILURE);
+    }
+    return new_bonuses;
+}
+
+void broadcast_bonus_collected(server_state_t *state, uint8_t player_id, uint16_t cell)
+{
+    msg_generic_t header = {
+        .msg_type = MSG_BONUS_RETRIEVED,
+        .sender_id = player_id,
+        .target_id = BROADCAST};
+
+    msg_bonus_retrieved_t payload = {
+        .player_id = player_id,
+        .cell = htons(cell),
+    };
+
+    for (int i = 0; i < MAX_PLAYERS; i++)
+    {
+        if (!state->clients[i].connected)
+            continue;
+        write_exact(state->clients[i].fd, &header, sizeof(header));
+        write_exact(state->clients[i].fd, &payload, sizeof(payload));
+    }
 }
 
 void broadcast_move(server_state_t *state, uint8_t player_id, uint16_t cell)
@@ -545,6 +676,27 @@ void broadcast_move(server_state_t *state, uint8_t player_id, uint16_t cell)
     msg_moved_t payload = {
         .player_id = player_id,
         .cell = htons(cell)};
+    for (int i = 0; i < MAX_PLAYERS; i++)
+    {
+        if (!state->clients[i].connected)
+            continue;
+        write_exact(state->clients[i].fd, &header, sizeof(header));
+        write_exact(state->clients[i].fd, &payload, sizeof(payload));
+    }
+}
+
+void broadcast_bonus_available(server_state_t *state, bonus_type_t bonus_type, uint16_t cell)
+{
+    msg_generic_t header = {
+        .msg_type = MSG_BONUS_AVAILABLE,
+        .sender_id = SERVER,
+        .target_id = BROADCAST};
+
+    msg_bonus_available_t payload = {
+        .bonus_type = bonus_type,
+        .cell = htons(cell),
+    };
+
     for (int i = 0; i < MAX_PLAYERS; i++)
     {
         if (!state->clients[i].connected)
