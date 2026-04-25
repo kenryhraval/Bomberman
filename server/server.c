@@ -6,7 +6,7 @@
 #include <poll.h>
 
 #include "server.h"
-#include "client.h"
+#include "handle_client.h"
 #include "game.h"
 #include "map.h"
 

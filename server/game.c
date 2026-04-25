@@ -2,7 +2,7 @@
 
 #include "game.h"
 #include "server.h"
-#include "client.h"
+#include "handle_client.h"
 
 #include <time.h>
 #include <arpa/inet.h>
