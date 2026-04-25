@@ -137,6 +137,8 @@ void maybe_spawn_bonus(server_state_t *state, uint16_t row, uint16_t col)
 {
 }
 
+void calculate_explosion_footprint(
+
 void explode(server_state_t *state, int bomb_idx)
 {
     bomb_t *bomb = &state->bombs[bomb_idx];
@@ -158,7 +160,13 @@ void explode(server_state_t *state, int bomb_idx)
             state->explosions[i].row = bomb->row;
             state->explosions[i].col = bomb->col;
             state->explosions[i].radius = bomb->radius;
-            state->explosions[i].duration_ticks = state->config->explosion_duration_ticks;
+
+            int max_cells_in_radius = bomb->radius * 4 + 1; // max cells in explosion footprint (cross-shaped)
+            state->explosions[i].footprint = malloc(max_cells_in_radius * sizeof(uint16_t));
+
+            calculate_explosion_footprint(state, &state->explosions[i]);
+
+            state->explosions[i].duration_ticks = state->map->configs.explosion_duration_ticks;
             break;
         }
     }
@@ -397,6 +405,49 @@ void handle_bomb(server_state_t *state, event_t *ev)
     broadcast_bomb(state, ev->player_id, ev->data.cell);
 }
 
+bool is_cell_hit_by_explosion(server_state_t *state,
+                                     explosion_t *expl,
+                                     uint16_t target_row,
+                                     uint16_t target_col)
+{
+    // center cell is always part of explosion
+    if (expl->row == target_row && expl->col == target_col)
+        return true;
+
+    // explosion is cross-shaped 
+    // ignore cells not aligned with center
+    if (expl->row != target_row && expl->col != target_col)
+        return false;
+
+    // check cells between explosion center and target cell for blocks that would stop the explosion
+    int step_row = 0;
+    int step_col = 0;
+    if (expl->row == target_row)
+        step_col = (target_col > expl->col) ? 1 : -1;
+    else
+        step_row = (target_row > expl->row) ? 1 : -1;
+
+    for (int dist = 1; dist <= expl->radius; dist++)
+    {
+        int row = (int)expl->row + step_row * dist;
+        int col = (int)expl->col + step_col * dist;
+
+        if (row < 0 || row >= state->map->rows ||
+            col < 0 || col >= state->map->cols)
+            break;
+
+        uint8_t cell = state->map->cells[make_cell_index((uint16_t)row, (uint16_t)col, state->map->cols)];
+
+        if ((uint16_t)row == target_row && (uint16_t)col == target_col)
+            return true;
+
+        if (cell == HARD_BLOCK || cell == SOFT_BLOCK || cell == BOMB)
+            break;
+    }
+
+    return false;
+}
+
 void handle_move(server_state_t *state, event_t *ev)
 {
     client_t *client = &state->clients[ev->player_id];
@@ -458,6 +509,21 @@ void handle_move(server_state_t *state, event_t *ev)
         if (state->clients[i].player.row == new_row &&
             state->clients[i].player.col == new_col)
             return;
+    }
+
+    // check if player enters an active explosion area
+    for (int i = 0; i < MAX_BOMBS; i++)
+    {
+        if (!state->explosions[i].active)
+            continue;
+
+        if (is_cell_hit_by_explosion(state, &state->explosions[i], new_row, new_col))
+        {
+            p->alive = false;
+            broadcast_death(state, p->id);
+            check_win_condition(state);
+            return;
+        }
     }
 
     // update player position

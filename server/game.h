@@ -10,6 +10,7 @@ void game_tick(void *arg);
 void handle_move(server_state_t *state, event_t *ev);
 void handle_bomb(server_state_t *state, event_t *ev);
 void explode(server_state_t *state, int bomb_idx);
+void calculate_explosion_footprint(server_state_t *state, explosion_t *expl);
 
 void broadcast_move(server_state_t *state, uint8_t player_id, uint16_t cell);
 void broadcast_bomb(server_state_t *state, uint8_t player_id, uint16_t cell);

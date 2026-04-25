@@ -20,6 +20,7 @@ typedef struct {
     bool active;
     uint16_t row, col; // center of explosion
     uint8_t radius;    // radius, client calculates explosion area based on this
+    uint16_t* footprint;
     uint16_t duration_ticks;
 } explosion_t;
 
