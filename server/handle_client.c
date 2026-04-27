@@ -1,6 +1,80 @@
 #include "handle_client.h"
 #include "event_queue.h"
 
+void watchdog_handler(union sigval sv)
+{
+    watchdog_param_t *param = sv.sival_ptr;
+
+    pthread_mutex_lock(&param->state->mutex);
+
+    // if client is still waiting for pong
+    if (param->client->waiting_for_pong)
+    {
+        printf("Client %d timed out, removing...\n", param->client->player.id);
+        // ping was sent 30s ago, no pong received -> remove
+        if (param->client->connected) // guard against double-remove
+            remove_client(param->state, param->client->player.id);
+        pthread_mutex_unlock(&param->state->mutex);
+        return;
+    }
+    else
+    {
+        printf("Client %d is alive, feeding watchdog\n", param->client->player.id);
+    }
+
+    param->client->waiting_for_pong = true;
+    pthread_mutex_unlock(&param->state->mutex); // unlock before send
+
+    // send ping to check if client is alive
+    send_ping(param->client->fd, SERVER, param->client->player.id);
+
+    // feed for another 30 seconds
+    feed_player_watchdog(param->timer_id);
+}
+
+void start_player_watchdog(timer_t *timer_id, client_t *client, server_state_t *state, watchdog_param_t **out_param)
+{
+    watchdog_param_t *param = malloc(sizeof(watchdog_param_t));
+    param->timer_id = timer_id;
+    param->client = client;
+    param->state = state;
+
+    struct sigevent sev = {
+        .sigev_notify = SIGEV_THREAD,
+        .sigev_notify_function = watchdog_handler,
+        .sigev_value.sival_ptr = param,
+    };
+    if (timer_create(CLOCK_MONOTONIC, &sev, timer_id) < 0)
+    {
+        perror("timer_create");
+        free(param);
+        return;
+    }
+
+    *out_param = param;
+
+    struct itimerspec ts = {
+        .it_value = {.tv_sec = CLIENT_TIMEOUT_SECONDS},
+        .it_interval = {.tv_sec = 0},
+    };
+
+    if (timer_settime(*timer_id, 0, &ts, NULL) < 0)
+    {
+        perror("timer_settime");
+    }
+
+    printf("Watchdog started for client %d, timeout=%d seconds\n",
+           client->player.id, CLIENT_TIMEOUT_SECONDS);
+}
+
+void feed_player_watchdog(timer_t *timer_id)
+{
+    struct itimerspec ts = {
+        .it_value = {.tv_sec = CLIENT_TIMEOUT_SECONDS},
+        .it_interval = {.tv_sec = 0}};
+    timer_settime(*timer_id, 0, &ts, NULL);
+}
+
 void *client_loop(void *args)
 {
     client_thread_args_t *client_args = (client_thread_args_t *)args;
@@ -10,12 +84,22 @@ void *client_loop(void *args)
 
     int fd = state->clients[idx].fd;
     msg_generic_t header;
+    timer_t watchdog_timer;
+    watchdog_param_t *watchdog_param = NULL;
+    start_player_watchdog(&watchdog_timer, &state->clients[idx], state, &watchdog_param);
 
     printf("Started client thread for client %d\n", idx);
 
+    bool exit_thread = false;
     while (read_exact(fd, &header, sizeof(header)) == 0)
     {
         pthread_mutex_lock(&state->mutex);
+
+        if (state->clients[idx].connected)
+        {
+            state->clients[idx].waiting_for_pong = false;
+            feed_player_watchdog(&watchdog_timer);
+        }
 
         printf("Received msg type %u from client %d\n", header.msg_type, idx);
 
@@ -24,8 +108,7 @@ void *client_loop(void *args)
         case MSG_LEAVE:
         {
             remove_client(state, idx);
-            pthread_mutex_unlock(&state->mutex);
-            return NULL; // exit thread
+            break;
         }
 
         case MSG_SET_READY:
@@ -39,7 +122,6 @@ void *client_loop(void *args)
                 start_game(state);
             }
 
-
             break;
         }
 
@@ -50,8 +132,8 @@ void *client_loop(void *args)
             if (res < 0)
             {
                 remove_client(state, idx);
-                pthread_mutex_unlock(&state->mutex);
-                return NULL; // exit thread
+                exit_thread = true;
+                break;
             }
 
             break;
@@ -59,7 +141,6 @@ void *client_loop(void *args)
 
         case MSG_PONG:
         {
-            state->clients[idx].last_pong = time(NULL);
             break;
         }
 
@@ -69,8 +150,8 @@ void *client_loop(void *args)
             if (read_exact(fd, &payload, sizeof(payload)) < 0)
             {
                 remove_client(state, idx);
-                pthread_mutex_unlock(&state->mutex);
-                return NULL; // exit thread
+                exit_thread = true;
+                break; // exit thread
             }
 
             event_t ev = {
@@ -92,8 +173,8 @@ void *client_loop(void *args)
             if (read_exact(fd, &payload, sizeof(payload)) < 0)
             {
                 remove_client(state, idx);
-                pthread_mutex_unlock(&state->mutex);
-                return NULL; // exit thread
+                exit_thread = true;
+                break; // exit thread
             }
 
             event_t ev = {
@@ -113,14 +194,24 @@ void *client_loop(void *args)
         }
 
         pthread_mutex_unlock(&state->mutex);
+
+        if (exit_thread)
+            break;
     }
 
     printf("Client %d disconnected\n", idx);
 
-    // recv return 0 meaning client discontected
+    // recv return 0 meaning client disconnected
+    // maybe already removed by watchdog
     pthread_mutex_lock(&state->mutex);
-    remove_client(state, idx);
+    if (state->clients[idx].connected)
+        remove_client(state, idx);
     pthread_mutex_unlock(&state->mutex);
+
+    // remove timer
+    timer_delete(watchdog_timer);
+    if (watchdog_param)
+        free(watchdog_param);
 
     return NULL;
 }
@@ -131,7 +222,7 @@ void broadcast_hello(server_state_t *state, int sender_idx, const msg_hello_t *h
     {
         if (state->clients[i].connected && i != sender_idx)
         {
-            // vienīgais veids, kā nodot jaunā sender_idx, 
+            // vienīgais veids, kā nodot jaunā sender_idx,
             // ir iestatot sender_id kā apraides avotu
             send_hello(state->clients[i].fd, sender_idx, BROADCAST, hello);
         }
@@ -198,8 +289,7 @@ void broadcast_map(server_state_t *state)
 {
     msg_map_t map_msg = {
         .height = state->map.rows,
-        .width = state->map.cols
-    };
+        .width = state->map.cols};
 
     for (int i = 0; i < MAX_PLAYERS; i++)
     {
@@ -211,13 +301,11 @@ void broadcast_map(server_state_t *state)
     }
 }
 
-
 void broadcast_moved(server_state_t *state, uint8_t player_id, uint16_t cell)
 {
     msg_moved_t moved_msg = {
         .player_id = player_id,
-        .cell = htons(cell)
-    };
+        .cell = htons(cell)};
 
     for (int i = 0; i < MAX_PLAYERS; i++)
     {
@@ -227,7 +315,6 @@ void broadcast_moved(server_state_t *state, uint8_t player_id, uint16_t cell)
         send_moved(state->clients[i].fd, SERVER, state->clients[i].player.id, &moved_msg);
     }
 }
-
 
 // void broadcast_sync_board(server_state_t *state)
 // {
@@ -256,7 +343,6 @@ void broadcast_moved(server_state_t *state, uint8_t player_id, uint16_t cell)
 //     }
 // }
 
-
 bool all_players_ready(server_state_t *state)
 {
     if (state->player_count < 2)
@@ -271,18 +357,15 @@ bool all_players_ready(server_state_t *state)
             return false;
     }
 
-
     return true;
 }
-
-
 
 void start_game(server_state_t *state)
 {
     memset(state->bombs, 0, sizeof(state->bombs));
     memset(state->explosions, 0, sizeof(state->explosions));
     state->current_tick = 0;
-    
+
     state->game_status = GAME_RUNNING;
 
     // set all players to alive and put them on start positions
@@ -329,5 +412,4 @@ void start_game(server_state_t *state)
 
         broadcast_moved(state, p->id, cell);
     }
-
 }

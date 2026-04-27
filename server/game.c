@@ -15,7 +15,7 @@ void *game_loop(void *arg)
     struct timespec last_tick, now;
     clock_gettime(CLOCK_MONOTONIC, &last_tick);
 
-    while (true)
+    while (state->server_running)
     {
         clock_gettime(CLOCK_MONOTONIC, &now);
         long elapsed_ms = (now.tv_sec - last_tick.tv_sec) * 1000 +
@@ -79,17 +79,18 @@ void game_tick(void *arg)
     // check for explosion end
     for (int i = 0; i < MAX_BOMBS; i++)
     {
-        if (!state->explosions[i].active)
+        if (!state->explosions[i].source.active)
             continue;
         state->explosions[i].duration_ticks--;
 
         if (state->explosions[i].duration_ticks == 0)
         {
-            state->explosions[i].active = false;
+            bomb_t* source = &state->explosions[i].source;
+            source->active = false;
             broadcast_explosion_end(state,
-                                    state->explosions[i].row,
-                                    state->explosions[i].col,
-                                    state->explosions[i].radius);
+                                    source->row,
+                                    source->col,
+                                    source->radius);
             free(state->explosions[i].footprint);
             state->explosions[i].footprint = NULL;
             state->explosions[i].footprint_size = 0;
@@ -126,14 +127,22 @@ void maybe_spawn_bonus(server_state_t *state, uint16_t row, uint16_t col)
             break;
         }
 
-        // realloc bonuses array and add new bonus
-        state->bonuses = realloc(state->bonuses, (state->bonus_count + 1) * sizeof(bonus_t));
-        if (state->bonuses == NULL)
+        // find empty slot in bonuses array and add new bonus
+        int free_slot = -1;
+        for (size_t i = 0; i < state->bonus_count; i++)
         {
-            perror("Failed to allocate memory for bonuses");
-            exit(EXIT_FAILURE);
+            if (!state->bonuses[i].active)
+            {
+                free_slot = i;
+                break;
+            }
         }
-        state->bonuses[state->bonus_count] = new_bonus;
+        if (free_slot == -1)
+        {
+            perror("Failed to find empty slot for bonuses");
+            return;
+        }
+        state->bonuses[free_slot] = new_bonus;
         state->bonus_count++;
 
         uint16_t bonus_cell = make_cell_index(row, col, state->map.cols);
@@ -147,7 +156,7 @@ void calculate_explosion_footprint(server_state_t *state, explosion_t *expl)
 {   
     // explosion footprint always includes the center cell
     int idx = 0;
-    expl->footprint[idx++] = make_cell_index(expl->row, expl->col, state->map.cols);
+    expl->footprint[idx++] = make_cell_index(expl->source.row, expl->source.col, state->map.cols);
     
     // bomb propagation directions
     int dirs[4][2] = {{-1, 0}, {1, 0}, {0, -1}, {0, 1}};
@@ -156,11 +165,11 @@ void calculate_explosion_footprint(server_state_t *state, explosion_t *expl)
     for (int d = 0; d < 4; d++)
     {   
         // propagate explosion in this direction until we reach max radius or hit a block
-        for (int r = 1; r <= expl->radius; r++)
+        for (int r = 1; r <= expl->source.radius; r++)
         {
             // calculate explosion cell coordinates
-            int row = (int)expl->row + dirs[d][0] * r;
-            int col = (int)expl->col + dirs[d][1] * r;
+            int row = (int)expl->source.row + dirs[d][0] * r;
+            int col = (int)expl->source.col + dirs[d][1] * r;
 
             // check map bounds
             if (row < 0 || row >= state->map.rows ||
@@ -199,13 +208,11 @@ void explode(server_state_t *state, int bomb_idx)
     // add explosion to the explosion state array
     for (int i = 0; i < MAX_BOMBS; i++)
     {
-        if (!state->explosions[i].active)
+        if (!state->explosions[i].source.active)
         {
-            state->explosions[i].active = true;
-            state->explosions[i].row = bomb->row;
-            state->explosions[i].col = bomb->col;
-            state->explosions[i].radius = bomb->radius;
+            state->explosions[i].source = *bomb;
 
+            
             int max_cells_in_radius = bomb->radius * 4 + 1; // max cells in explosion footprint (cross-shaped)
             state->explosions[i].footprint = malloc(max_cells_in_radius * sizeof(uint16_t));
             if (state->explosions[i].footprint == NULL)
@@ -478,7 +485,7 @@ void handle_move(server_state_t *state, event_t *ev)
     // check if player enters an active explosion area
     for (int i = 0; i < MAX_BOMBS; i++)
     {
-        if (!state->explosions[i].active)
+        if (!state->explosions[i].source.active)
             continue;
 
         // check explosion footprint for target cell
@@ -539,46 +546,7 @@ void handle_move(server_state_t *state, event_t *ev)
             // broadcast bonus collected
             broadcast_bonus_collected(state, p->id, make_cell_index(new_row, new_col, state->map.cols));
 
-            bonus_cleanup(&state->bonuses, &state->bonus_count);
-
             break;
         }
     }
-}
-
-void bonus_cleanup(bonus_t **bonuses, size_t *bonus_count)
-{
-    //move all inactive bonuses to the end of the array 
-    size_t j = 0;
-    for (size_t i = 0; i < *bonus_count; i++)
-    {
-        if ((*bonuses)[i].active)
-        {
-            if (i != j)
-                (*bonuses)[j] = (*bonuses)[i];
-            j++;
-        }
-    }
-
-    if (j == 0)
-    {
-        free(*bonuses);
-        *bonuses = NULL;
-        *bonus_count = 0;
-        return;
-    }
-
-    if (j == *bonus_count)
-        return;
-
-    // clear remaining slots
-    bonus_t *new_bonuses = realloc(*bonuses, j * sizeof(bonus_t));
-    if (new_bonuses == NULL)
-    {
-        perror("Failed to reallocate memory for bonuses");
-        exit(EXIT_FAILURE);
-    }
-
-    *bonuses = new_bonuses;
-    *bonus_count = j;
 }

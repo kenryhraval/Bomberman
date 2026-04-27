@@ -11,6 +11,15 @@ void init_event_queue(event_queue_t *queue)
     memset(queue->events, 0, sizeof(queue->events));
 }
 
+void cleanup_event_queue(event_queue_t *queue)
+{
+    pthread_mutex_destroy(&queue->mutex);
+    memset(queue->events, 0, sizeof(queue->events));
+    queue->head = 0;
+    queue->tail = 0;
+    queue->count = 0;
+}
+
 int enqueue_event(event_queue_t *queue, event_t *event)
 {
     pthread_mutex_lock(&queue->mutex);

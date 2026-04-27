@@ -8,6 +8,7 @@
 /* Server Configurations */
 #define MAP_ARGUMENT "--map"
 #define MAP_FILENAME_DEFAULT "map.txt"
+#define CLIENT_TIMEOUT_SECONDS 30
 
 #define PORT 6969
 #define CLIENT_ID "bomb-client-0.1"

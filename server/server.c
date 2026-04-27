@@ -8,6 +8,23 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <errno.h>
+
+
+// for signal handler access
+static server_state_t *global_server_state = NULL;
+
+void signal_handler(int signum)
+{
+    if (signum == SIGINT)
+    {
+        printf("Received SIGINT, shutting down server...\n");
+        if (global_server_state != NULL)
+        {
+            global_server_state->server_running = false;
+        }
+    }
+}
 
 int player_name_in_use(const server_state_t *state, const char *name)
 {
@@ -25,21 +42,36 @@ int serve_main(int argc, char *argv[])
 {
     int server_fd, client_fd;
     struct sockaddr_in remote_address;
-    
+
     // global server structs
     server_state_t server_state;
-    server_state.bonuses = NULL;
-    server_state.bonus_count = 0;
+    memset(&server_state, 0, sizeof(server_state));
     server_state.game_status = GAME_LOBBY;
-    server_state.player_count = 0;
-    server_state.current_tick = 0;
-    memset(server_state.clients, 0, sizeof(server_state.clients));
-    memset(server_state.bombs, 0, sizeof(server_state.bombs));
-    memset(server_state.explosions, 0, sizeof(server_state.explosions));
-    memset(server_state.stats, 0, sizeof(server_state.stats));
+    server_state.server_running = true;
+
     init_event_queue(&server_state.queue);
     pthread_mutex_init(&server_state.mutex, NULL);
 
+    // add signal handler
+    // do not set SA_RESTART flag for SIGINT handler, so that accept() will be interrupted
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_handler = signal_handler;
+    sigemptyset(&sa.sa_mask);
+
+    if (sigaction(SIGINT, &sa, NULL) < 0)
+    {
+        perror("sigaction SIGINT");
+        return 1;
+    }
+
+    if (sigaction(SIGTERM, &sa, NULL) < 0)
+    {
+        perror("sigaction SIGTERM");
+        return 1;
+    }
+    // set global pointer for signal handler access
+    global_server_state = &server_state;
 
     // get --map argument
     const char *map_filename = MAP_FILENAME_DEFAULT;
@@ -58,7 +90,6 @@ int serve_main(int argc, char *argv[])
         perror("Failed to load map");
         return 1;
     }
-
 
     // set bomb_explosion_duration_ticks for each player based on config
     for (int i = 0; i < MAX_PLAYERS; i++)
@@ -102,11 +133,17 @@ int serve_main(int argc, char *argv[])
     pthread_t game_thread;
     pthread_create(&game_thread, NULL, game_loop, &server_state);
 
-    while (true)
+    while (server_state.server_running)
     {
         client_fd = accept(server_fd, NULL, NULL);
         if (client_fd < 0)
         {
+            if (errno == EINTR && !server_state.server_running)
+                break;
+
+            if (!server_state.server_running)
+                break;
+
             perror("accept");
             continue;
         }
@@ -134,7 +171,49 @@ int serve_main(int argc, char *argv[])
     }
 
     close(server_fd);
+    close_all_client_fds(&server_state);
+    main_cleanup(&server_state);
     return 0;
+}
+
+void close_all_client_fds(server_state_t *state)
+{
+    for (int i = 0; i < MAX_PLAYERS; i++)
+    {
+        if (state->clients[i].connected)
+        {
+            close(state->clients[i].fd);
+            state->clients[i].connected = false;
+        }
+    }
+}
+
+void main_cleanup(server_state_t *state)
+{
+    free(state->bonuses);
+    state->bonuses = NULL;
+    state->bonus_count = 0;
+
+    for (int i = 0; i < MAX_BOMBS; i++)
+    {
+        if (state->explosions[i].footprint != NULL)
+        {
+            free(state->explosions[i].footprint);
+            state->explosions[i].footprint = NULL;
+            state->explosions[i].footprint_size = 0;
+        }
+    }
+
+    // destroy mutex
+    pthread_mutex_destroy(&state->mutex);
+
+    // destroy event queue
+    cleanup_event_queue(&state->queue);
+
+    // memset state to 0
+    memset(state, 0, sizeof(server_state_t));
+
+    printf("Server shutdown complete.\n");
 }
 
 int find_free_slot(client_t clients[])
@@ -291,7 +370,6 @@ int add_client(server_state_t *state, int fd)
     return free_idx;
 }
 
-
 void remove_client_quietly(server_state_t *state, int id)
 {
     close(state->clients[id].fd);
@@ -305,7 +383,6 @@ void remove_client_quietly(server_state_t *state, int id)
 
     state->player_count--;
 }
-
 
 void remove_client(server_state_t *state, int id)
 {

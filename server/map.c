@@ -16,7 +16,8 @@ int load_map(const char *filename, server_state_t *server_state)
            &server_state->config.explosion_duration_ticks,
            &server_state->config.explosion_radius,
            &server_state->config.bomb_timer_ticks);
-
+    
+    size_t soft_block_count = 0;
     // 2. read each cell and save player start positions
     for (int r = 0; r < server_state->map.rows; r++)
     {
@@ -46,6 +47,10 @@ int load_map(const char *filename, server_state_t *server_state)
                 server_state->bonus_count++;
             }
 
+            // if cell is soft block, increment soft block count in statistics
+            if (cell == SOFT_BLOCK)
+                soft_block_count++;
+
             // if player position, save it to configs and set cell to empty
             if (cell >= PLAYER_1 && cell <= PLAYER_LAST)
             {
@@ -56,6 +61,17 @@ int load_map(const char *filename, server_state_t *server_state)
             }
         }
     }
+
+    // allocate memory for bonuses based on soft block count (worst case all soft blocks spawn bonuses)
+    // and bonus count in map file is not accurate
+    bonus_t *new_bonuses = realloc(server_state->bonuses, (server_state->bonus_count + soft_block_count) * sizeof(bonus_t));
+    if (new_bonuses == NULL)
+    {
+        perror("Failed to allocate memory for bonuses");
+        exit(EXIT_FAILURE);
+    }
+    server_state->bonuses = new_bonuses;
+
 
     fclose(f);
     return 0;

@@ -6,6 +6,7 @@
 #include <arpa/inet.h>
 #include <poll.h>
 #include <pthread.h>
+#include <signal.h>
 
 #include "shared/protocol.h"
 #include "server_protocol.h"
@@ -14,9 +15,7 @@
 #include "configs.h"
 
 typedef struct {
-    bool active;
-    uint16_t row, col; // center of explosion
-    uint8_t radius;    // radius, client calculates explosion area based on this
+    bomb_t source;
     uint16_t* footprint;
     size_t footprint_size;
     uint16_t duration_ticks;
@@ -31,7 +30,7 @@ typedef struct {
 typedef struct {
     int fd;
     int connected;
-    time_t last_pong;
+    bool waiting_for_pong;
     player_t player;
 } client_t;
 
@@ -49,9 +48,14 @@ typedef struct server_state {
     pthread_mutex_t mutex;
     uint64_t current_tick;
     statistics_t stats[MAX_PLAYERS];
+
+    bool server_running; // used to signal threads to exit when server is shutting down
 } server_state_t;
 
 int serve_main(int argc, char *argv[]);
+void main_cleanup(server_state_t *state);    
+void close_all_client_fds(server_state_t *state);
+void signal_handler(int signum);
 
 void broadcast_leave(server_state_t *state, int sender_idx);
 void broadcast_hello(server_state_t *state, int sender_idx, const msg_hello_t *hello);

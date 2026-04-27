@@ -1,5 +1,5 @@
 CC=gcc
-CFLAGS=-Wall -Wextra -std=c11
+CFLAGS=-Wall -Wextra -std=c11 -D_GNU_SOURCE -lrt
 # -I. is needed to find the shared/protocol.h header from both server and client directories
 CPPFLAGS=-I.
 
@@ -13,7 +13,7 @@ client: build
 
 build:
 	mkdir -p build
-
+ 
 clean:
 	rm -f build/server_app build/client_app
 
