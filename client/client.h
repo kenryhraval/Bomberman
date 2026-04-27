@@ -2,7 +2,7 @@
 #define CLIENT_H
 
 #include <stdint.h>
-#include "shared/protocol.h"
+#include "../shared/protocol.h"
 
 typedef struct {
     int fd;

@@ -9,7 +9,7 @@ server: build
 	$(CC) $(CPPFLAGS) $(CFLAGS) server/main.c server/map.c server/game.c server/server.c server/handle_client.c server/event_queue.c shared/protocol.c -o build/server_app
 
 client: build
-	$(CC) $(CPPFLAGS) $(CFLAGS) client/client.c client/main.c client/helpers.c shared/protocol.c -o build/client_app -lncursesw
+	$(CC) $(CPPFLAGS) $(CFLAGS) client/client.c client/main.c client/draw.c client/helpers.c shared/protocol.c -o build/client_app -lncursesw
 
 build:
 	mkdir -p build
