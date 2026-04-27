@@ -18,6 +18,7 @@
 #define BROADCAST 254
 #define MAX_MAP_ROWS 255
 #define MAX_MAP_COLS 255
+#define TICK_RATE 20
 
 typedef enum {
     HARD_BLOCK = 'H',
