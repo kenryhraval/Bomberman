@@ -1,6 +1,6 @@
 #pragma once
 #include "server.h"
-#include "../shared/protocol.h"
+#include "shared/protocol.h"
 
 
 void broadcast_move(server_state_t *state, uint8_t player_id, uint16_t cell);

@@ -7,7 +7,7 @@
 #include <poll.h>
 #include <pthread.h>
 
-#include "../shared/protocol.h"
+#include "shared/protocol.h"
 #include "server_protocol.h"
 #include "event_queue.h"
 #include "map.h"

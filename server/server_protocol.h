@@ -1,5 +1,5 @@
 #pragma once
-#include "../shared/protocol.h"
+#include "shared/protocol.h"
 
 /*
 Šī ziņa vienmēr tiek sūtīta kā atbilde uz HELLO ziņu. Ja klients, kas mēģina pieslēgties, 30

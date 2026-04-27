@@ -1,5 +1,5 @@
 #include "client_protocol.h"
-#include "../shared/protocol.h"
+#include "shared/protocol.h"
 
 #include <arpa/inet.h>
 
