@@ -55,10 +55,11 @@ typedef enum
 
 typedef enum
 {
-    BONUS_NONE = 0,
-    BONUS_SPEED = 1,
-    BONUS_RADIUS = 2,
-    BONUS_TIMER = 3
+    BONUS_NONE = '\0',
+    BONUS_SPEED = 'A',
+    BONUS_RADIUS = 'R',
+    BONUS_TIMER = 'T',
+    BONUS_BOMB_COUNT = 'N'
 } bonus_type_t;
 
 typedef enum
@@ -98,6 +99,7 @@ typedef struct PACKED
     uint8_t bomb_count;
     uint8_t bomb_radius;
     uint16_t bomb_timer_ticks;
+    uint16_t bomb_explosion_duration_ticks;
     uint16_t speed;
 
     // Used for rate-limiting moves based on player's speed

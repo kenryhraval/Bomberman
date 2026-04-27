@@ -8,20 +8,24 @@
 #include <pthread.h>
 #include "event_queue.h"
 #include "map.h"
+#include "configs.h"
 
-#include "../shared/protocol.h"
-
-#define PORT 6969
-#define CLIENT_ID "bomb-client-0.1"
-#define SERVER_ID "bomb-server-0.1"
-#define MAX_BOMBS (START_BOMB_COUNT * MAX_PLAYERS)
+#include "shared/protocol.h"
 
 typedef struct {
     bool active;
     uint16_t row, col; // center of explosion
     uint8_t radius;    // radius, client calculates explosion area based on this
+    uint16_t* footprint;
+    size_t footprint_size;
     uint16_t duration_ticks;
 } explosion_t;
+
+typedef struct {
+    bool active;
+    uint16_t row, col;
+    bonus_type_t type;
+} bonus_t;
 
 typedef struct {
     int fd;
@@ -30,20 +34,22 @@ typedef struct {
     player_t player;
 } client_t;
 
-typedef struct {
+typedef struct server_state {
     game_status_t game_status;
     uint8_t player_count;
     client_t clients[MAX_PLAYERS];
     bomb_t bombs[MAX_BOMBS];
     explosion_t explosions[MAX_BOMBS];
-    map_t* map;
-    config_t* config;
+    bonus_t *bonuses;
+    size_t bonus_count;
+    map_t map;
+    config_t config;
     event_queue_t queue;
     pthread_mutex_t mutex;
     uint64_t current_tick;
 } server_state_t;
 
-int serve_main(map_t *map, config_t *config);
+int serve_main(int argc, char *argv[]);
 
 void broadcast_leave(server_state_t *state, int sender_idx);
 void broadcast_hello(server_state_t *state, int sender_idx, const msg_hello_t *hello);

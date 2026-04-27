@@ -10,7 +10,7 @@
 #include "game.h"
 #include "map.h"
 
-#include "../shared/protocol.h"
+#include "shared/protocol.h"
 
 int player_name_in_use(const server_state_t *state, const char *name)
 {
@@ -24,22 +24,49 @@ int player_name_in_use(const server_state_t *state, const char *name)
     return 0;
 }
 
-int serve_main(map_t *map, config_t *config)
+int serve_main(int argc, char *argv[])
 {
     int server_fd, client_fd;
     struct sockaddr_in remote_address;
     
+    // global server structs
     server_state_t server_state;
+    server_state.bonuses = NULL;
+    server_state.bonus_count = 0;
     server_state.game_status = GAME_LOBBY;
     server_state.player_count = 0;
-    server_state.map = map;
-    server_state.config = config;
     server_state.current_tick = 0;
     memset(server_state.clients, 0, sizeof(server_state.clients));
     memset(server_state.bombs, 0, sizeof(server_state.bombs));
     memset(server_state.explosions, 0, sizeof(server_state.explosions));
     init_event_queue(&server_state.queue);
     pthread_mutex_init(&server_state.mutex, NULL);
+
+
+    // get --map argument
+    const char *map_filename = MAP_FILENAME_DEFAULT;
+    for (int i = 1; i < argc - 1; i++)
+    {
+        if (strcmp(argv[i], MAP_ARGUMENT) == 0)
+        {
+            map_filename = argv[i + 1];
+            break;
+        }
+    }
+
+    // load map and config
+    if (load_map(map_filename, &server_state) < 0)
+    {
+        perror("Failed to load map");
+        return 1;
+    }
+
+
+    // set bomb_explosion_duration_ticks for each player based on config
+    for (int i = 0; i < MAX_PLAYERS; i++)
+    {
+        server_state.clients[i].player.bomb_explosion_duration_ticks = server_state.config.explosion_duration_ticks;
+    }
 
     // 1. create socket
     server_fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -95,6 +122,11 @@ int serve_main(map_t *map, config_t *config)
 
         // spawn client thread
         client_thread_args_t *args = malloc(sizeof(client_thread_args_t));
+        if (args == NULL)
+        {
+            perror("Failed to allocate memory for client thread args");
+            exit(EXIT_FAILURE);
+        }
         args->state = &server_state;
         args->client_idx = free_idx;
 
@@ -212,12 +244,12 @@ int add_client(server_state_t *state, int fd)
     p->alive = true;
     p->ready = false;
     p->last_move_tick = 0;
-    p->speed = state->config->player_speed;
+    p->speed = state->config.player_speed;
     p->bomb_count = 10; // TODO: idk what bomb count to start with
-    p->bomb_radius = state->config->explosion_radius;
-    p->bomb_timer_ticks = state->config->bomb_timer_ticks;
-    p->row = state->config->start_row[free_idx];
-    p->col = state->config->start_col[free_idx];
+    p->bomb_radius = state->config.explosion_radius;
+    p->bomb_timer_ticks = state->config.bomb_timer_ticks;
+    p->row = state->config.start_row[free_idx];
+    p->col = state->config.start_col[free_idx];
 
     strncpy(p->name, hello_player_name, MAX_NAME_LEN);
     p->name[MAX_NAME_LEN] = '\0';
