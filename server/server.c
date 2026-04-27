@@ -1,16 +1,13 @@
+#include "server.h"
+#include "handle_client.h"
+#include "game.h"
+
+#include <arpa/inet.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <arpa/inet.h>
-#include <poll.h>
-
-#include "server.h"
-#include "handle_client.h"
-#include "game.h"
-#include "map.h"
-
-#include "shared/protocol.h"
 
 int player_name_in_use(const server_state_t *state, const char *name)
 {
@@ -39,6 +36,7 @@ int serve_main(int argc, char *argv[])
     memset(server_state.clients, 0, sizeof(server_state.clients));
     memset(server_state.bombs, 0, sizeof(server_state.bombs));
     memset(server_state.explosions, 0, sizeof(server_state.explosions));
+    memset(server_state.stats, 0, sizeof(server_state.stats));
     init_event_queue(&server_state.queue);
     pthread_mutex_init(&server_state.mutex, NULL);
 

@@ -100,10 +100,6 @@ int send_leave(int fd, uint8_t sender_id, uint8_t target_id)
 }
 
 
-
-
-
-
 int send_pong(int fd, uint8_t sender_id, uint8_t target_id) 
 {
     if (send_header(fd, MSG_PONG, sender_id, target_id) < 0) {

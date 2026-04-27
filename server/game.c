@@ -222,7 +222,7 @@ void explode(server_state_t *state, int bomb_idx)
     }
 
     // check inside the bomb
-    check_player_deaths(state, bomb->row, bomb->col);
+    check_player_deaths(state, bomb->row, bomb->col, bomb->owner_id);
 
     // bomb propagation directions
     int dirs[4][2] = {{-1, 0}, {1, 0}, {0, -1}, {0, 1}};
@@ -252,8 +252,11 @@ void explode(server_state_t *state, int bomb_idx)
             }
             else if (cell == SOFT_BLOCK)
             {
-                // destroyes soft block
+                // destroys soft block
                 state->map.cells[idx] = EMPTY;
+
+                // update statistics and broadcast
+                state->stats[bomb->owner_id].blocks_destroyed++;
                 broadcast_block_destroyed(state, make_cell_index(row, col, state->map.cols));
 
                 // check if bonus should spawn
@@ -279,7 +282,7 @@ void explode(server_state_t *state, int bomb_idx)
             else
             {
                 // if empty cell, check if player is there and kill them
-                check_player_deaths(state, row, col);
+                check_player_deaths(state, row, col, bomb->owner_id);
             }
         }
     }
@@ -287,7 +290,7 @@ void explode(server_state_t *state, int bomb_idx)
 }
 
 
-void check_player_deaths(server_state_t *state, uint16_t row, uint16_t col)
+void check_player_deaths(server_state_t *state, uint16_t row, uint16_t col, uint8_t killer_id)
 {
     for (int i = 0; i < MAX_PLAYERS; i++)
     {
@@ -301,6 +304,12 @@ void check_player_deaths(server_state_t *state, uint16_t row, uint16_t col)
         if (p->row == row && p->col == col)
         {
             p->alive = false;
+
+            // update statistics
+            if (p->id != killer_id)
+                state->stats[killer_id].kills++;
+
+            // broadcast death
             broadcast_death(state, p->id);
         }
     }
@@ -333,13 +342,14 @@ void check_win_condition(server_state_t *state)
     if (alive_count == 1)
     {
         broadcast_winner(state, last_alive_id);
+        broadcast_statistics(state);
         broadcast_set_game_status(state, GAME_END);
         state->game_status = GAME_END;
     }
     else if (alive_count == 0)
     {
-        // draw
-        broadcast_winner(state, 255); // TODO: How to indicate draw?
+        broadcast_winner(state, SERVER); // draw
+        broadcast_statistics(state);
         broadcast_set_game_status(state, GAME_END);
         state->game_status = GAME_END;
     }
@@ -397,6 +407,7 @@ void handle_bomb(server_state_t *state, event_t *ev)
     // broadcast BOMB to all clients
     broadcast_bomb(state, ev->player_id, ev->data.cell);
 }
+
 
 void handle_move(server_state_t *state, event_t *ev)
 {
@@ -521,6 +532,9 @@ void handle_move(server_state_t *state, event_t *ev)
             // deactivate bonus
             state->bonuses[i].active = false;
             state->map.cells[make_cell_index(new_row, new_col, state->map.cols)] = EMPTY;
+
+            // update statistics
+            state->stats[p->id].bonuses_collected++;
 
             // broadcast bonus collected
             broadcast_bonus_collected(state, p->id, make_cell_index(new_row, new_col, state->map.cols));

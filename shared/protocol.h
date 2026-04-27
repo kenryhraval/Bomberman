@@ -78,8 +78,6 @@ typedef struct PACKED {
     uint16_t cell;
 } msg_block_destroyed_t;
 
-// WELCOME
-
 typedef struct PACKED {
     uint8_t player_id;
     uint8_t ready;

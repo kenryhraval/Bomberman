@@ -1,5 +1,7 @@
 #include <ncurses.h>
 #include <stdio.h>
+#include <string.h>
+
 #include "draw.h"
 
 void draw_init_colors(void)
@@ -84,34 +86,78 @@ void draw_lobby(const client_state_t *state)
 {
     erase();
 
+    int rows, cols;
+    getmaxyx(stdscr, rows, cols);
+    (void)rows;
+
+    const char *title = "BOMBERMAN";
+    const char *subtitle = "Priekšnams";
+
+    attron(A_BOLD);
+    mvprintw(1, (cols - (int)strlen(title)) / 2, "%s", title);
+    attroff(A_BOLD);
+
+    mvprintw(3, (cols - (int)strlen(subtitle)) / 2, "%s", subtitle);
+
     player_t me = state->players[state->my_id];
 
-    mvprintw(0, 0, "Bomberman");
-    mvprintw(2, 0, "Jauna spēle: jūs esat priekšnamā!");
+    int box_w = 54;
+    int start_x = (cols - box_w) / 2;
+    int start_y = 5;
 
-    if (!me.ready)
-        mvprintw(4, 0, "Spied 'R', lai paziņotu gatavību");
-    else
-        mvprintw(4, 0, "Esat gatavs! Gaidiet citus spēlētājus...");
+    mvprintw(start_y,     start_x, "+----------------------------------------------------+");
+    mvprintw(start_y + 1, start_x, "| Spēlētāji                                          |");
+    mvprintw(start_y + 2, start_x, "+------+------------------------------+--------------+");
+    mvprintw(start_y + 3, start_x, "| ID   | Vārds                        | Statuss      |");
+    mvprintw(start_y + 4, start_x, "+------+------------------------------+--------------+");
 
-    mvprintw(6, 0, "Spēlētāji:");
+    int row = start_y + 5;
 
-    int row = 8;
     for (int id = 0; id < MAX_PLAYERS; id++) {
         if (state->players[id].name[0] == '\0')
             continue;
 
-        attron(COLOR_PAIR(state->players[id].ready ? 1 : 2));
-        mvprintw(row, 0, "[%u] %s%s",
-                 state->players[id].id,
-                 state->players[id].name,
-                 id == state->my_id ? " (jūs)" : "");
-        attroff(COLOR_PAIR(state->players[id].ready ? 1 : 2));
+        int color = state->players[id].ready ? C_READY : C_NOT_READY;
+        const char *status = state->players[id].ready ? "Gatavs" : "Nav gatavs";
+
+        char display_name[LOBBY_NAME_COL_W + 1];
+
+        if (id == state->my_id) {
+            snprintf(display_name, sizeof(display_name), "%.*s (tu)",
+                    LOBBY_NAME_COL_W - 5,
+                    state->players[id].name);
+        } else {
+            snprintf(display_name, sizeof(display_name), "%.*s",
+                    LOBBY_NAME_COL_W,
+                    state->players[id].name);
+        }
+
+        mvprintw(row, start_x, "| %-4u | %-28s | %-12s |",
+                state->players[id].id,
+                display_name,
+                "");
+
+        attron(COLOR_PAIR(color));
+        mvprintw(row, start_x + 40, "%-12s", status);
+        attroff(COLOR_PAIR(color));
 
         row++;
     }
 
-    mvprintw(18, 0, "Spied 'X', lai pamestu spēli");
+    mvprintw(row++, start_x, "+------+------------------------------+--------------+");
+
+    row += 2;
+
+    if (!me.ready) {
+        attron(A_BOLD);
+        mvprintw(row++, start_x, "Spied R, lai paziņotu gatavību");
+        attroff(A_BOLD);
+    } else {
+        mvprintw(row++, start_x, "Jūs esat gatavs. Gaida pārējos spēlētājus...");
+    }
+
+    mvprintw(row + 1, start_x, "Spied X, lai pamestu spēli");
+
     refresh();
 }
 
@@ -188,7 +234,7 @@ void draw_running(const client_state_t *state)
         mvprintw(row++, panel_x, "[%u] %s%s",
                  state->players[i].id,
                  state->players[i].name,
-                 i == state->my_id ? " (jūs)" : "");
+                 i == state->my_id ? " (tu)" : "");
     }
 
     // offset by 2 tile for border
@@ -202,7 +248,49 @@ void draw_running(const client_state_t *state)
 void draw_end(const client_state_t *state)
 {
     erase();
-    mvprintw(0, 0, "Bomberman");
-    mvprintw(2, 0, "Spēle beigusies: uzvarēja %s", state->players[state->winner_id].name);
+
+    int rows, cols;
+    getmaxyx(stdscr, rows, cols);
+    (void)rows;
+
+    const char *title = "BOMBERMAN";
+    mvprintw(1, (cols - (int)strlen(title)) / 2, "%s", title);
+
+    attron(A_BOLD);
+
+    if (state->winner_id == 255) {
+        const char *draw_msg = "Spēle beigusies: neizšķirts!";
+        mvprintw(3, (cols - (int)strlen(draw_msg)) / 2, "%s", draw_msg);
+    } else if (state->winner_id < MAX_PLAYERS &&
+               state->players[state->winner_id].name[0] != '\0') {
+        char winner_msg[128];
+        snprintf(winner_msg, sizeof(winner_msg),
+                 "Spēle beigusies: uzvarēja %s!",
+                 state->players[state->winner_id].name);
+
+        mvprintw(3, (cols - (int)strlen(winner_msg)) / 2, "%s", winner_msg);
+    } else {
+        const char *unknown_msg = "Spēle beigusies!";
+        mvprintw(3, (cols - (int)strlen(unknown_msg)) / 2, "%s", unknown_msg);
+    }
+
+    attroff(A_BOLD);
+
+    int box_w = 42;
+    int box_h = 9;
+    int start_y = 6;
+    int start_x = (cols - box_w) / 2;
+
+    mvprintw(start_y,     start_x, "+----------------------------------------+");
+    mvprintw(start_y + 1, start_x, "|              Tava statistika           |");
+    mvprintw(start_y + 2, start_x, "+----------------------------------------+");
+    mvprintw(start_y + 3, start_x, "| Uzbombīti spēlētāji:%-18u |", state->stats.kills);
+    mvprintw(start_y + 4, start_x, "| Iznīcinātas kastes: %-18u |", state->stats.blocks_destroyed);
+    mvprintw(start_y + 5, start_x, "| Savākti pārsteigumi:%-18u |", state->stats.bonuses_collected);
+    mvprintw(start_y + 6, start_x, "+----------------------------------------+");
+
+    const char *hint = "Spied X, lai izietu";
+    mvprintw(start_y + box_h, (cols - (int)strlen(hint)) / 2, "%s", hint);
+
     refresh();
 }
