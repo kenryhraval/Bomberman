@@ -1,5 +1,4 @@
-#ifndef PROTOCOL_H
-#define PROTOCOL_H
+#pragma once
 
 #include <stdint.h>
 #include <stddef.h>
@@ -94,11 +93,9 @@ typedef struct PACKED {
     welcome_client_entry_t others[MAX_PLAYERS];
 } msg_welcome_t;
 
-
-// ERROR
-// DISCONNECT
-// LEAVE
-// MAP
+typedef struct PACKED {
+    statistics_t stats;
+} msg_statistics_t;
 
 
 /*
@@ -132,6 +129,9 @@ int read_exact(int fd, void *buf, size_t count);
 int write_exact(int fd, const void *buf, size_t count);
 
 
+int send_header(int fd, uint8_t type, uint8_t sender_id, uint8_t target_id);
+
+
 /*
 Šo ziņu klients nosūta serverim tūlīt pēc pieslēgšanās. Klienta identifikators ir simbolu
 virkne, kas identificē klienta programmas nosaukumu un versiju, savukārt spēlētāja vārds
@@ -143,25 +143,6 @@ nosūta WELCOME ziņu.
 int send_hello(int fd, uint8_t sender_id, uint8_t target_id, const msg_hello_t *msg);
 int recv_hello(int fd, msg_generic_t *header, msg_hello_t *msg);
 
-
-/*
-Šī ziņa vienmēr tiek sūtīta kā atbilde uz HELLO ziņu. Ja klients, kas mēģina pieslēgties, 30
-sekunžu laikā nesaņem ne šo ziņu, ne DISCONNECT ziņu, tam vajadzētu aizvērt TCP
-savienojumu. Pirms šī ziņa ir saņemta, citas ziņas klients sūtīt nedrīkst.
-● Servera identifikators, tāpat kā klienta identifikators, identificē servera programmas
-nosaukumu un versiju.
-● Spēles statuss ir viens no skaitļiem augstāk redzamajā statusu tabulā. Tas norāda
-to, vai spēle ir lobijā vai arī ir sākusies.
-● Visbeidzot, tiek nosūtīts masīvs ar pārējo klientu ID, spēlētāju gatavību un
-spēlētāju vārdiem. Ja spēle nav lobija stāvoklī, tad klients ir gatavs tad un tikai tad,
-ja tas piedalās spēlē.
-Ja statuss ir 1, tad serverim vajadzētu arī nosūtīt SYNC_BOARD ziņu par katru spēlētāju,
-savukārt, ja statuss ir 3, tad serverim vajadzētu nosūtīt WINNER ziņu.
-Kā ziņas avots tiek norādīts piešķirtais spēlētāja ID.
-*/
-int send_welcome(int fd, uint8_t sender_id, uint8_t target_id, const msg_welcome_t *msg);
-int recv_welcome(int fd, msg_generic_t *header, msg_welcome_t *msg);
-
 /*
 Ja klients šo ziņu nosūta serverim, tas nozīmē, ka tas grasās atvienoties. Pēc šīs ziņas
 nosūtīšanas klientam jāaizver savienojums.
@@ -169,22 +150,6 @@ Ja serveris šo ziņu nosūta klientam, tad tas nozīmē, ka klients, kura ID ir
 avots, ir atvienojies vai ticis atvienots
 */
 int send_leave(int fd, uint8_t sender_id, uint8_t target_id);
-
-/*
-Ziņu nosūta serveris klientam, pirms close(socket). Pēc šīs ziņas saņemšanas klientam
-vajadzētu aizvērt TCP savienojumu.
-*/
-int send_disconnect(int fd, uint8_t sender_id, uint8_t target_id);
-
-
-/*
-Klients šo ziņu serverim nosūta, lai norādītu savu gatavību sākt spēli. Kad visi spēlētāji ir
-iestatījuši sevi kā gatavus, tad tiek sākta spēle.
-Serveris ir tiesīgs nosūtīt šo ziņu arī tad, ja attiecīgais klients nav tādu nosūtījis, tādējādi
-“piespiedu kārtā” padarot to par spēlētāju. Tā var īstenot, piemēram, iespēju pieslēgties
-pēc savienojuma pazušanas spēles laikā
-*/
-int send_set_ready(int fd, uint8_t sender_id, uint8_t target_id);
 
 /*
 Ziņu var nosūtīt gan klients, gan serveris otrai komunikācijas pusei.
@@ -196,35 +161,4 @@ int send_ping(int fd, uint8_t sender_id, uint8_t target_id);
 Atbilde uz PING ziņu
 */
 int send_pong(int fd, uint8_t sender_id, uint8_t target_id);
-
-/*
-Šo ziņu serveris sūta klientiem ar tekošo kartes informāciju. W=width, H=height. Katrai
-šūnai viens baits, līdzīgi kā kartes konfigurācijas failā.
-*/
-int send_map(int fd, uint8_t sender_id, uint8_t target_id, const msg_map_t *msg, const uint8_t *cells);
-
-/*
-Šo ziņu klients sūta serverim, ja viņš vēlas paiet kaut kādā virzienā. Viņš nosūta savu
-spēlētāja ID un kustības virzienu, kurā viņš vēlas iet. Ja tur var iet, tad serveris nosūta
-tālāk visiem klientiem “MOVE”.
-Kustības virziens ir kodēts kā ASCII simbols: U-up, D-dowm, L-left, R-right.
-*/
-int send_move_attempt(int fd, uint8_t sender_id, uint8_t direction);
-
-/*
-Šo ziņu serveris sūta visiem klientiem, lai informētu, ka kāds spēlētājs ir pakustējies uz
-jaunu šūnu.
-*/
-int send_moved(int fd, uint8_t sender_id, uint8_t target_id, const msg_moved_t *msg);
-
-/*
-Šo ziņu klients sūta serverim, ja viņš vēlas nolikt spridzekli. Serveris pārbauda, un, ja var,
-nosūta visiem klientiem “BOMB” paketi.
-*/
-int send_bomb_attempt(int fd, uint8_t sender_id, const uint16_t row, const uint16_t col, const uint16_t map_cols);
-
-
-
-
-#endif
 

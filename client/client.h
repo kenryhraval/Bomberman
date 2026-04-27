@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include "../shared/protocol.h"
+#include "client_protocol.h"
 
 typedef struct {
     int fd;
@@ -14,6 +15,7 @@ typedef struct {
     map_t map;
     map_t overlay_map;
     uint8_t winner_id;
+    statistics_t stats;
 } client_state_t;
 
 #define EXPLOSION_CELL 'X'

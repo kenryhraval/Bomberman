@@ -269,8 +269,19 @@ int client_poll_network(client_state_t *state)
             // atzīmē iznīcināto bloku uz pamatkartes
             state->map.cells[cell] = EMPTY;
 
+        } else if (header.msg_type == MSG_STATISTICS) {
+            msg_statistics_t payload;
+
+            if (read_exact(state->fd, &payload, sizeof(payload)) < 0)
+                return -1;
+
+            // pārliecināties par endiness sakritību, saņemot statistiku
+            state->stats.kills = payload.stats.kills;
+            state->stats.blocks_destroyed = ntohs(payload.stats.blocks_destroyed);
+            state->stats.bonuses_collected = ntohs(payload.stats.bonuses_collected);
+        
         } else {
-            return -1; // unknown message type
+            return -1; // nezināms ziņas tips
         }
     }
 

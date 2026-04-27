@@ -2,7 +2,6 @@
 #include "shared/common.h"
 
 /* Game Configurations */
-#define TICK_RATE 20 // 20 ticks per second => 50ms per tick
 #define BLOCK_DESTROY_BONUS_CHANCE 0.2 // 20% chance to spawn a bonus when a soft block is destroyed
 #define BOMB_EXPLOSION_BONUS_INCREASE_TICKS 10
 

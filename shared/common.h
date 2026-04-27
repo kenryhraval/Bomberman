@@ -85,7 +85,7 @@ typedef enum
     MSG_BONUS_AVAILABLE = 45,
     MSG_BONUS_RETRIEVED = 46,
     MSG_BLOCK_DESTROYED = 47,
-    MSG_SYNC_BOARD = 100,
+    MSG_STATISTICS = 100
 } msg_type_t;
 
 typedef struct PACKED
@@ -116,6 +116,13 @@ typedef struct PACKED
     uint8_t radius;
     uint16_t timer_ticks;
 } bomb_t;
+
+typedef struct PACKED
+{
+    uint8_t kills;
+    uint16_t blocks_destroyed;
+    uint16_t bonuses_collected;
+} statistics_t;
 
 static inline uint16_t make_cell_index(uint16_t row, uint16_t col, uint16_t cols)
 {

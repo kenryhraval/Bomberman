@@ -6,11 +6,12 @@
 #include <arpa/inet.h>
 #include <poll.h>
 #include <pthread.h>
+
+#include "../shared/protocol.h"
+#include "server_protocol.h"
 #include "event_queue.h"
 #include "map.h"
 #include "configs.h"
-
-#include "shared/protocol.h"
 
 typedef struct {
     bool active;
@@ -47,6 +48,7 @@ typedef struct server_state {
     event_queue_t queue;
     pthread_mutex_t mutex;
     uint64_t current_tick;
+    statistics_t stats[MAX_PLAYERS];
 } server_state_t;
 
 int serve_main(int argc, char *argv[]);
@@ -55,6 +57,7 @@ void broadcast_leave(server_state_t *state, int sender_idx);
 void broadcast_hello(server_state_t *state, int sender_idx, const msg_hello_t *hello);
 void broadcast_set_ready(server_state_t *state, int sender_idx);
 void remove_client_quietly(server_state_t *state, int id);
+void broadcast_statistics(server_state_t *state);
 
 int find_free_slot(client_t clients[]);
 int add_client(server_state_t *state, int fd);
