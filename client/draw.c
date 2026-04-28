@@ -322,9 +322,9 @@ void draw_map_select(const client_state_t *state)
     int start_x = (cols - box_w) / 2;
     int start_y = 5;
 
-    mvprintw(start_y,     start_x, "+--------------------------------------------------------------------------+");
-    mvprintw(start_y + 1, start_x, "| ID | Karte                    | Izmērs | Spēl. | Ātr. | Spr. | Rād. | T |");
-    mvprintw(start_y + 2, start_x, "+----+--------------------------+--------+-------+------+------+------+---+");
+    mvprintw(start_y,     start_x, "+---------------------------------------------------------------------------+");
+    mvprintw(start_y + 1, start_x, "| ID | Karte                    | Izmērs  | Spēl. | Ātr. | Spr. | Rād. | T  |");
+    mvprintw(start_y + 2, start_x, "+----+--------------------------+---------+-------+------+------+------+----+");
 
     int row = start_y + 3;
 
@@ -352,7 +352,7 @@ void draw_map_select(const client_state_t *state)
         row++;
     }
 
-    mvprintw(row++, start_x, "+----+--------------------------+--------+-------+------+------+------+---+");
+    mvprintw(row++, start_x, "+----+--------------------------+---------+-------+------+------+------+----+");
 
     row += 2;
     mvprintw(row++, start_x, "↑/↓: izvēlēties karti");

@@ -10,6 +10,86 @@
 #define DEFAULT_IP "127.0.0.1"
 #define DEFAULT_PORT 6969
 
+
+static int read_name_screen(char *player_name, size_t player_name_size)
+{
+    int pos = 0;
+    int ch;
+
+    memset(player_name, 0, player_name_size);
+
+    erase();
+
+    while (true)
+    {
+        int rows, cols;
+        getmaxyx(stdscr, rows, cols);
+        (void)rows;
+
+        const char *title = "BOMBERMAN";
+        const char *prompt = "Ievadiet lietotājvārdu:";
+
+        erase();
+
+        attron(A_BOLD);
+        mvprintw(2, (cols - (int)strlen(title)) / 2, "%s", title);
+        attroff(A_BOLD);
+
+        mvprintw(5, (cols - (int)strlen(prompt)) / 2, "%s", prompt);
+
+        int box_w = MAX_NAME_LEN + 4;
+        int box_x = (cols - box_w) / 2;
+        int box_y = 7;
+
+        mvprintw(box_y, box_x, "+");
+        for (int i = 0; i < box_w - 2; i++)
+            addch('-');
+        addch('+');
+
+        mvprintw(box_y + 1, box_x, "| %-*s |", MAX_NAME_LEN, player_name);
+
+        mvprintw(box_y + 2, box_x, "+");
+        for (int i = 0; i < box_w - 2; i++)
+            addch('-');
+        addch('+');
+
+        mvprintw(box_y + 4, box_x, "Enter: turpināt");
+        mvprintw(box_y + 5, box_x, "Esc: iziet");
+
+        move(box_y + 1, box_x + 2 + pos);
+        refresh();
+
+        ch = getch();
+
+        if (ch == 27) // Esc
+            return -1;
+
+        if (ch == '\n' || ch == KEY_ENTER)
+        {
+            if (pos > 0)
+                return 0;
+            continue;
+        }
+
+        if (ch == KEY_BACKSPACE || ch == 127 || ch == 8)
+        {
+            if (pos > 0)
+            {
+                pos--;
+                player_name[pos] = '\0';
+            }
+            continue;
+        }
+
+        if (ch >= 32 && ch <= 126 && pos < MAX_NAME_LEN)
+        {
+            player_name[pos++] = (char)ch;
+            player_name[pos] = '\0';
+        }
+    }
+}
+
+
 int main(int argc, char *argv[])
 {
     setlocale(LC_ALL, "");
@@ -27,25 +107,37 @@ int main(int argc, char *argv[])
     // noklusējuma skats ir spēles priekšnama spēlētāju saraksts
     state.view = VIEW_LOBBY;
 
-    if (argc >= 2) ip = argv[1]; 
+    if (argc >= 2) ip = argv[1];
     if (argc >= 3) port = atoi(argv[2]);
 
     char player_name[MAX_NAME_LEN + 1] = {0};
 
-    printf("Ievadiet lietotājvārdu: ");
-    fflush(stdout);
-    if (fgets(player_name, sizeof(player_name), stdin) == NULL) {
-        printf("Failed to read player name\n");
-        return 1;
+    initscr();
+    noecho();
+    cbreak();
+    keypad(stdscr, TRUE);
+    timeout(-1); // blocking input while entering name
+    curs_set(1);
+
+    draw_init_colors();
+
+    if (read_name_screen(player_name, sizeof(player_name)) < 0)
+    {
+        endwin();
+        return 0;
     }
-    player_name[strcspn(player_name, "\n")] = '\0';
+
+    timeout(1000 / TICK_RATE);
+    curs_set(0);
 
     if (client_connect(&state, ip, port) < 0) {
+        endwin();
         printf("Failed to connect\n");
         return 1;
     }
 
     if (client_handshake(&state, player_name) < 0) {
+        endwin();
         printf("Handshake failed\n");
         client_close(&state);
         return 1;
