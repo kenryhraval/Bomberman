@@ -108,6 +108,16 @@ typedef struct PACKED {
     uint8_t map_id;
 } msg_map_selected_t;
 
+typedef struct PACKED
+{
+    uint8_t player_id;
+    uint8_t bomb_count;
+    uint8_t bomb_radius;
+    uint16_t bomb_timer_ticks;
+    uint16_t bomb_explosion_duration_ticks;
+    uint16_t speed;
+} msg_player_update_t;
+
 
 /*
  * Reads exactly `count` bytes from file descriptor `fd` into buffer `buf`.

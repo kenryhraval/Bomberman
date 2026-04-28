@@ -2,6 +2,7 @@
 #include "server.h"
 #include "shared/protocol.h"
 
+int send_player_update(int fd, uint8_t sender_id, uint8_t target_id, const player_t *player);
 
 void broadcast_bomb(const server_state_t *state, uint8_t player_id, uint16_t cell);
 void broadcast_death(const server_state_t *state, uint8_t player_id);

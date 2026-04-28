@@ -590,6 +590,9 @@ void handle_move(server_state_t *state, const event_t *ev)
             // update statistics
             state->stats[p->id].bonuses_collected++;
 
+            // send player update to show new bonus stats
+            send_player_update(client->fd, SERVER, p->id, p);
+
             // broadcast bonus collected
             broadcast_bonus_collected(state, p->id, bonus_cell);
 

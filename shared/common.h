@@ -121,6 +121,7 @@ typedef enum
     MSG_MAP_CHOICES = 101,
     MSG_MAP_SELECTED = 102,
     MSG_TIMER_SYNC = 103,
+    MSG_PLAYER_UPDATE = 104,
 } msg_type_t;
 
 

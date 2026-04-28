@@ -351,6 +351,20 @@ int client_poll_network(client_state_t *state)
             state->current_tick = ntohl(payload.current_tick);
             state->last_tick_time_ms = get_monotonic_time_ms();
             
+        }  else if (header.msg_type == MSG_PLAYER_UPDATE) {
+            msg_player_update_t payload;
+
+            if (read_exact(state->fd, &payload, sizeof(payload)) < 0)
+                return -1;
+
+            uint8_t id = payload.player_id;
+
+            state->players[id].bomb_count = payload.bomb_count;
+            state->players[id].bomb_radius = payload.bomb_radius;
+            state->players[id].bomb_timer_ticks = ntohs(payload.bomb_timer_ticks);
+            state->players[id].bomb_explosion_duration_ticks =
+                ntohs(payload.bomb_explosion_duration_ticks);
+            state->players[id].speed = ntohs(payload.speed);
         } else {
             
             printf("Unhandled msg %u from server\n", header.msg_type);

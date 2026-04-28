@@ -3,6 +3,32 @@
 
 #include <arpa/inet.h>
 
+int send_player_update(int fd, uint8_t sender_id, uint8_t target_id, const player_t *player)
+{
+    msg_generic_t header = {
+        .msg_type = MSG_PLAYER_UPDATE,
+        .sender_id = sender_id,
+        .target_id = target_id,
+    };
+
+    msg_player_update_t payload = {
+        .player_id = player->id,
+        .bomb_count = player->bomb_count,
+        .bomb_radius = player->bomb_radius,
+        .bomb_timer_ticks = htons(player->bomb_timer_ticks),
+        .bomb_explosion_duration_ticks = htons(player->bomb_explosion_duration_ticks),
+        .speed = htons(player->speed),
+    };
+
+    if (write_exact(fd, &header, sizeof(header)) < 0)
+        return -1;
+
+    if (write_exact(fd, &payload, sizeof(payload)) < 0)
+        return -1;
+
+    return 0;
+}
+
 void broadcast_block_destroyed(const server_state_t *state, uint16_t cell)
 {
     msg_generic_t header = {

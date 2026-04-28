@@ -192,6 +192,8 @@ void draw_running(const client_state_t *state)
     if (tick < GAME_DRAW_TICK_TIMEOUT)
         time_left = GAME_DRAW_TICK_TIMEOUT - tick;
 
+    player_t me = state->players[state->my_id];
+
     char header[64];
     snprintf(header, sizeof(header), "BOMBERMAN   Laiks: %u", time_left);
 
@@ -199,7 +201,17 @@ void draw_running(const client_state_t *state)
     mvprintw(0, (cols - (int)strlen(header)) / 2, "%s", header);
     attroff(A_BOLD);
 
-    int start_row = 2;
+    char bonuses[128];
+    snprintf(bonuses, sizeof(bonuses),
+             "Bumbas: %u   Rādius: %u   Ilgums: %u   Ātrums: %u",
+             me.bomb_count,
+             me.bomb_radius,
+             me.bomb_explosion_duration_ticks,
+             me.speed);
+
+    mvprintw(1, (cols - (int)strlen(bonuses)) / 2, "%s", bonuses);
+
+    int start_row = 3;
     int start_col = 2;
 
     /*
@@ -220,8 +232,6 @@ void draw_running(const client_state_t *state)
         visible_cols = 1;
     if (visible_rows < 1)
         visible_rows = 1;
-
-    player_t me = state->players[state->my_id];
 
     /*
      * Camera follows the current player.
@@ -299,7 +309,7 @@ void draw_running(const client_state_t *state)
         draw_tile(y, x, i == state->my_id ? C_ME : C_PLAYER, ' ', label);
     }
 
-    const char *hint = "WASD: kustēties   B: spridzini   X: beigt spēli";
+    const char *hint = "WASD: kustēties   B: spridzināt   X: beigt spēli";
     mvprintw(rows - 2, (cols - (int)strlen(hint)) / 2, "%s", hint);
 
     refresh();
@@ -336,18 +346,18 @@ void draw_end(const client_state_t *state)
 
     attroff(A_BOLD);
 
-    int box_w = 42;
+    int box_w = 48;
     int box_h = 9;
     int start_y = 6;
     int start_x = (cols - box_w) / 2;
 
-    mvprintw(start_y,     start_x, "+----------------------------------------+");
-    mvprintw(start_y + 1, start_x, "|              Tava statistika           |");
-    mvprintw(start_y + 2, start_x, "+----------------------------------------+");
-    mvprintw(start_y + 3, start_x, "| Uzbombīti spēlētāji:%-18u |", state->stats.kills);
-    mvprintw(start_y + 4, start_x, "| Iznīcinātas kastes: %-18u |", state->stats.blocks_destroyed);
-    mvprintw(start_y + 5, start_x, "| Savākti pārsteigumi:%-18u |", state->stats.bonuses_collected);
-    mvprintw(start_y + 6, start_x, "+----------------------------------------+");
+    mvprintw(start_y,     start_x, "+----------------------------------------------+");
+    mvprintw(start_y + 1, start_x, "|                 Tava statistika              |");
+    mvprintw(start_y + 2, start_x, "+----------------------------------------------+");
+    mvprintw(start_y + 3, start_x, "| Uzbombīti spēlētāji:            %-12u |", state->stats.kills);
+    mvprintw(start_y + 4, start_x, "| Iznīcinātas  kastes:            %-12u |", state->stats.blocks_destroyed);
+    mvprintw(start_y + 5, start_x, "| Savākti pārsteigumi:            %-12u |", state->stats.bonuses_collected);
+    mvprintw(start_y + 6, start_x, "+----------------------------------------------+");
 
     const char *hint = "Spied R, lai sāktu no jauna   X, lai izietu";
     mvprintw(start_y + box_h, (cols - (int)strlen(hint)) / 2, "%s", hint);

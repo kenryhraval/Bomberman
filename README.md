@@ -32,6 +32,9 @@ Kopīga daļa (`shared/`):
 Kartes un konfigurācija
 - Noklusējuma karte atrodas `map.txt`. Karte satur gan laukuma šūnu datus, gan sākuma pozīcijas/konfigurācijas lauciņus, kas tiek nolasīti ar `server/map.c`.
 
+![alt text](images/image.png)
+![alt text](images/image-1.png)
+![alt text](images/image-2.png)
 
 1. Kompilācija:
 

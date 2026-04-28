@@ -484,6 +484,8 @@ void start_game(server_state_t *state)
         {
             p->last_move_tick = state->current_tick;
         }
+
+        send_player_update(state->clients[i].fd, SERVER, p->id, p);
     }
 
     // 1. broadcast SET_STATUS
