@@ -75,3 +75,4 @@ int find_free_slot(const client_t clients[]);
 int add_client(server_state_t *state, int fd, const struct sockaddr_in *client_addr);
 void remove_client(server_state_t *state, int id);
 int player_name_in_use(const server_state_t *state, const char *name);
+void reassign_initiator(server_state_t *state);

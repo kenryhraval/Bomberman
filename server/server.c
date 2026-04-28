@@ -90,6 +90,10 @@ int serve_main(int argc, char *argv[])
     // save map path, it will be read when the game starts
     snprintf(server_state.selected_map_path, sizeof(server_state.selected_map_path), "%s", map_filename);
 
+    // scan available maps once at startup so player-count validation
+    // and initiators map-choice message can use the table directly
+    server_state.map_choice_count = scan_map_choices(MAPS_DIR, server_state.map_choices, MAX_MAP_CHOICES);
+
     // 1. create socket
     server_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (server_fd < 0)
@@ -348,6 +352,29 @@ int add_client(server_state_t *state, int fd, const struct sockaddr_in *client_a
         return -1;
     }
 
+    // check if map supports this player count
+    if (!is_reconnecting)
+    {
+        const server_map_choice_t *selected = NULL;
+        for (size_t i = 0; i < state->map_choice_count; i++)
+        {
+            if (strcmp(state->map_choices[i].path, state->selected_map_path) == 0)
+            {
+                selected = &state->map_choices[i];
+                break;
+            }
+        }
+
+        if (selected != NULL && state->player_count + 1 > selected->supported_players)
+        {
+            printf("Map '%s' only supports %u players, rejecting client %s\n",
+                   selected->name, selected->supported_players, hello_player_name);
+            send_disconnect(fd, SERVER, 255);
+            close(fd);
+            return -1;
+        }
+    }
+
     client_t *c = &state->clients[free_idx];
     player_t *p = &state->clients[free_idx].player;
 
@@ -442,6 +469,35 @@ int add_client(server_state_t *state, int fd, const struct sockaddr_in *client_a
     return free_idx;
 }
 
+void reassign_initiator(server_state_t *state)
+{
+    int new_initiator = -1;
+    for (int i = 0; i < MAX_PLAYERS; i++)
+    {
+        if (state->clients[i].connected)
+        {
+            new_initiator = i;
+            break;
+        }
+    }
+
+    if (new_initiator < 0)
+    {
+        state->initiator_id = 255;
+        printf("Initiator left, no connected clients remaining\n");
+        return;
+    }
+
+    state->initiator_id = new_initiator;
+    printf("Initiator reassigned to client %d\n", new_initiator);
+
+    if (state->game_status == GAME_LOBBY)
+    {
+        int fd = state->clients[new_initiator].fd;
+        if (find_available_map_choices_and_send(state, fd, new_initiator) < 0)
+            printf("Failed to send map choices to new initiator\n");
+    }
+}
 
 void remove_client_quietly(server_state_t *state, int id)
 {
@@ -453,9 +509,12 @@ void remove_client_quietly(server_state_t *state, int id)
 
     state->player_count--;
 
-    // if the initiator left, end game
+    // if the removed client was the initiator, reassign initiator
+    // to another connected client and send map choices if game is in lobby
+    // if the game is already running, initiator status does not matter
+    // if no other clients connected, initiator_id will be set to 255 (no initiator)
     if (id == state->initiator_id)
-        state->server_running = false;
+        reassign_initiator(state);
 }
 
 void remove_client(server_state_t *state, int id)
@@ -463,15 +522,5 @@ void remove_client(server_state_t *state, int id)
     // broadcast LEAVE message to all other clients before removing
     broadcast_leave(state, id);
 
-    close(state->clients[id].fd);
-    state->clients[id].fd = -1;
-    state->clients[id].connected = 0;
-
-    state->clients[id].player.ready = 0;
-
-    state->player_count--;
-
-    // if the initiator left, end game
-    if (id == state->initiator_id) 
-        state->server_running = false;
+    remove_client_quietly(state, id);
 }
