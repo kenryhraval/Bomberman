@@ -25,3 +25,6 @@ void start_game(server_state_t *state);
 void watchdog_handler(union sigval sv);
 void start_player_watchdog(timer_t *timer_id, client_t *client, server_state_t *state, watchdog_param_t **out_param);
 void feed_player_watchdog(timer_t *timer_id);
+
+void clear_game_objects(server_state_t *state);
+void reset_players_state(server_state_t *state);

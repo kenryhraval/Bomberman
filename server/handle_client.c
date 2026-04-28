@@ -84,6 +84,38 @@ void feed_player_watchdog(timer_t *timer_id)
     timer_settime(*timer_id, 0, &ts, NULL);
 }
 
+void clear_game_objects(server_state_t *state)
+{
+    for (int i = 0; i < MAX_BOMBS; i++)
+    {
+        if (state->explosions[i].footprint != NULL)
+        {
+            free(state->explosions[i].footprint);
+            state->explosions[i].footprint = NULL;
+            state->explosions[i].footprint_size = 0;
+        }
+    }
+    memset(state->bombs, 0, sizeof(state->bombs));
+    state->bomb_count = 0;
+    memset(state->explosions, 0, sizeof(state->explosions));
+    memset(state->bonuses, 0, sizeof(state->bonuses));
+    state->bonus_count = 0;
+    memset(state->stats, 0, sizeof(state->stats));
+}
+
+void reset_players_state(server_state_t *state)
+{
+    clear_game_objects(state);
+    
+    for (int i = 0; i < MAX_PLAYERS; i++)
+    {
+        if (!state->clients[i].connected)
+            continue;
+        state->clients[i].player.ready = false;
+        state->clients[i].player.alive = true;
+    }
+}
+
 void *client_loop(void *args)
 {
     client_thread_args_t *client_args = (client_thread_args_t *)args;
@@ -123,6 +155,17 @@ void *client_loop(void *args)
 
         case MSG_SET_READY:
         {
+            // any player pressing ready in GAME_END is treated as a restart request
+            if (state->game_status == GAME_END)
+            {
+
+                reset_players_state(state);
+
+                state->game_status = GAME_LOBBY;
+                broadcast_set_game_status(state, GAME_LOBBY);
+                break;
+            }
+
             if (state->game_status != GAME_LOBBY)
                 break;
 
@@ -215,7 +258,7 @@ void *client_loop(void *args)
                 exit_thread = true;
                 break; // exit thread
             }
-            
+
             if (payload.map_id >= state->map_choice_count)
                 break;
 
@@ -250,7 +293,6 @@ void *client_loop(void *args)
 
     return NULL;
 }
-
 
 // Send the full running-game state to a single client, using only
 // existing protocol messages. Used after a mid-game reconnect so the
@@ -367,7 +409,6 @@ void sync_board_to_client(const server_state_t *state, int idx)
     }
 }
 
-
 bool all_players_ready(const server_state_t *state)
 {
     if (state->player_count < 2)
@@ -382,17 +423,10 @@ bool all_players_ready(const server_state_t *state)
     return true;
 }
 
-
 void start_game(server_state_t *state)
 {
-    // no bombs, explosions, bonuses, or stats at the start
-    memset(state->bombs, 0, sizeof(state->bombs));
-    state->bomb_count = 0;
-    memset(state->explosions, 0, sizeof(state->explosions));
+    clear_game_objects(state);
     state->current_tick = 0;
-    memset(state->bonuses, 0, sizeof(state->bonuses));
-    state->bonus_count = 0;
-    memset(state->stats, 0, sizeof(state->stats));
 
     // load selected map only when the game starts
     // load the state configuration used in the loop below

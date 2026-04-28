@@ -295,7 +295,7 @@ void draw_end(const client_state_t *state)
     mvprintw(start_y + 5, start_x, "| Savākti pārsteigumi:%-18u |", state->stats.bonuses_collected);
     mvprintw(start_y + 6, start_x, "+----------------------------------------+");
 
-    const char *hint = "Spied X, lai izietu";
+    const char *hint = "Spied R, lai sāktu no jauna   X, lai izietu";
     mvprintw(start_y + box_h, (cols - (int)strlen(hint)) / 2, "%s", hint);
 
     refresh();

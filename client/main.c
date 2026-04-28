@@ -187,6 +187,9 @@ int main(int argc, char *argv[])
                     !state.players[state.my_id].ready) {
                     state.players[state.my_id].ready = true;
                     send_set_ready(state.fd, state.my_id, SERVER);
+                } else if (state.game_status == GAME_END) {
+                    // server interprets SET_READY during GAME_END as a restart request
+                    send_set_ready(state.fd, state.my_id, SERVER);
                 }
                 break;
 

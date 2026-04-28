@@ -152,7 +152,19 @@ int client_poll_network(client_state_t *state)
             msg_set_status_t payload;
             if (read_exact(state->fd, &payload, sizeof(payload)) < 0)
                 return -1;
-            
+
+            // restart: returning to lobby from end-game, clear per-game state
+            if (state->game_status == GAME_END && payload.game_status == GAME_LOBBY) {
+                for (int i = 0; i < MAX_PLAYERS; i++) {
+                    state->players[i].ready = false;
+                    state->players[i].alive = true;
+                }
+                memset(&state->stats, 0, sizeof(state->stats));
+                memset(&state->map, 0, sizeof(state->map));
+                memset(&state->overlay_map, 0, sizeof(state->overlay_map));
+                state->winner_id = 0;
+            }
+
             state->game_status = payload.game_status;
 
         } else if (header.msg_type == MSG_MAP) {

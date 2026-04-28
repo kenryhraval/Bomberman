@@ -192,17 +192,7 @@ void close_all_client_fds(server_state_t *state)
 
 void main_cleanup(server_state_t *state)
 {
-    state->bonus_count = 0;
-
-    for (int i = 0; i < MAX_BOMBS; i++)
-    {
-        if (state->explosions[i].footprint != NULL)
-        {
-            free(state->explosions[i].footprint);
-            state->explosions[i].footprint = NULL;
-            state->explosions[i].footprint_size = 0;
-        }
-    }
+    clear_game_objects(state);
 
     // destroy mutex
     pthread_mutex_destroy(&state->mutex);
