@@ -24,6 +24,10 @@
 #define MAX_MAP_CHOICES 16
 #define MAX_MAP_NAME_LEN 64
 
+// timeout condition for draw
+#define GAME_DRAW_TICK_TIMEOUT (5 * 60 * TICK_RATE)
+
+
 typedef struct PACKED {
     uint8_t id;
     char name[MAX_MAP_NAME_LEN];
