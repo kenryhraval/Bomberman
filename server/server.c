@@ -10,7 +10,6 @@
 #include <unistd.h>
 #include <errno.h>
 
-
 // for signal handler access
 static server_state_t *global_server_state = NULL;
 
@@ -135,7 +134,10 @@ int serve_main(int argc, char *argv[])
 
     while (server_state.server_running)
     {
-        client_fd = accept(server_fd, NULL, NULL);
+        struct sockaddr_in client_addr;
+        socklen_t addr_len = sizeof(client_addr);
+
+        client_fd = accept(server_fd, (struct sockaddr *)&client_addr, &addr_len);
         if (client_fd < 0)
         {
             if (errno == EINTR && !server_state.server_running)
@@ -149,7 +151,7 @@ int serve_main(int argc, char *argv[])
         }
 
         pthread_mutex_lock(&server_state.mutex);
-        int free_idx = add_client(&server_state, client_fd);
+        int free_idx = add_client(&server_state, client_fd, &client_addr);
         pthread_mutex_unlock(&server_state.mutex);
 
         if (free_idx < 0)
@@ -228,7 +230,7 @@ int find_free_slot(client_t clients[])
     return -1;
 }
 
-int add_client(server_state_t *state, int fd)
+int add_client(server_state_t *state, int fd, struct sockaddr_in *client_addr)
 {
     msg_generic_t header;
     msg_hello_t hello;
@@ -242,15 +244,6 @@ int add_client(server_state_t *state, int fd)
     }
 
     if (state->player_count >= MAX_PLAYERS)
-    {
-        printf("Server full, rejecting client\n");
-        send_disconnect(fd, SERVER, 255); // TODO: Idk if 255 here is correct
-        close(fd);
-        return -1;
-    }
-
-    int free_idx = find_free_slot(state->clients);
-    if (free_idx < 0)
     {
         printf("Server full, rejecting client\n");
         send_disconnect(fd, SERVER, 255); // TODO: Idk if 255 here is correct
@@ -282,6 +275,49 @@ int add_client(server_state_t *state, int fd)
     hello_client_id[MAX_CLIENT_ID_LEN] = '\0';
     memcpy(hello_player_name, hello.player_name, MAX_NAME_LEN);
     hello_player_name[MAX_NAME_LEN] = '\0';
+
+    bool is_reconnecting = false;
+    int reconnect_idx = -1;
+    // check if game is already in progress
+    if (state->game_status != GAME_LOBBY)
+    {
+        // check if this player was previously connected and is trying to reconnect
+        for (int i = 0; i < MAX_PLAYERS; i++)
+        {
+            if (state->clients[i].connected)
+                continue;
+            if (state->clients[i].player.name[0] == '\0')
+                continue; // empty slot, skip
+
+            // check name and ip
+            if (strncmp(state->clients[i].player.name, hello_player_name, MAX_NAME_LEN) == 0 &&
+                state->clients[i].addr.sin_addr.s_addr == client_addr->sin_addr.s_addr)
+            {
+                is_reconnecting = true;
+                reconnect_idx = i;
+                break;
+            }
+        }
+
+        if (!is_reconnecting)
+        {
+            printf("Game already in progress, rejecting client\n");
+            send_disconnect(fd, SERVER, 255); // TODO: Idk if 255 here is correct
+            close(fd);
+            return -1;
+        }
+    }
+
+    int free_idx = is_reconnecting
+                       ? reconnect_idx
+                       : find_free_slot(state->clients);
+    if (free_idx < 0)
+    {
+        printf("Server full, rejecting client\n");
+        send_disconnect(fd, SERVER, 255); // TODO: Idk if 255 here is correct
+        close(fd);
+        return -1;
+    }
 
     // check client version compatibility
     if (strncmp(hello_client_id, CLIENT_ID, MAX_CLIENT_ID_LEN) != 0)
@@ -316,20 +352,29 @@ int add_client(server_state_t *state, int fd)
     // 2. register client
     c->fd = fd;
     c->connected = true;
+    memcpy(&c->addr, client_addr, sizeof(struct sockaddr_in));
 
-    p->id = free_idx;
-    p->alive = true;
-    p->ready = false;
-    p->last_move_tick = 0;
-    p->speed = state->config.player_speed;
-    p->bomb_count = 10; // TODO: idk what bomb count to start with
-    p->bomb_radius = state->config.explosion_radius;
-    p->bomb_timer_ticks = state->config.bomb_timer_ticks;
-    p->row = state->config.start_row[free_idx];
-    p->col = state->config.start_col[free_idx];
+    if (is_reconnecting)
+    {
+        p->ready = true;
+        c->waiting_for_pong = false;
+    }
+    else
+    {
+        p->id = free_idx;
+        p->alive = true;
+        p->ready = false;
+        p->last_move_tick = 0;
+        p->speed = state->config.player_speed;
+        p->bomb_count = 10; // TODO: idk what bomb count to start with
+        p->bomb_radius = state->config.explosion_radius;
+        p->bomb_timer_ticks = state->config.bomb_timer_ticks;
+        p->row = state->config.start_row[free_idx];
+        p->col = state->config.start_col[free_idx];
 
-    strncpy(p->name, hello_player_name, MAX_NAME_LEN);
-    p->name[MAX_NAME_LEN] = '\0';
+        strncpy(p->name, hello_player_name, MAX_NAME_LEN);
+        p->name[MAX_NAME_LEN] = '\0';
+    }
 
     state->player_count++;
 
@@ -367,6 +412,14 @@ int add_client(server_state_t *state, int fd)
 
     printf("Broadcasted HELLO of player %s (id=%d) to other clients\n", p->name, p->id);
 
+    // Serveris ir tiesīgs nosūtīt šo ziņu arī tad, ja attiecīgais klients nav tādu nosūtījis, tādējādi “piespiedu kārtā” padarot to par spēlētāju. Tā var īstenot, piemēram, iespēju pieslēgties pēc savienojuma pazušanas spēles laikā.
+    if (is_reconnecting)
+    {
+        printf("Player %s (id=%d) is reconnecting, setting ready state to true\n", p->name, p->id);
+        p->ready = true;
+        broadcast_set_ready(state, free_idx);
+    }
+
     return free_idx;
 }
 
@@ -376,9 +429,6 @@ void remove_client_quietly(server_state_t *state, int id)
     state->clients[id].fd = -1;
     state->clients[id].connected = 0;
 
-    state->clients[id].player.id = 0;
-    state->clients[id].player.name[0] = '\0';
-    state->clients[id].player.alive = 0;
     state->clients[id].player.ready = 0;
 
     state->player_count--;
@@ -393,9 +443,6 @@ void remove_client(server_state_t *state, int id)
     state->clients[id].fd = -1;
     state->clients[id].connected = 0;
 
-    state->clients[id].player.id = 0;
-    state->clients[id].player.name[0] = '\0';
-    state->clients[id].player.alive = 0;
     state->clients[id].player.ready = 0;
 
     state->player_count--;

@@ -31,6 +31,7 @@ typedef struct {
     int fd;
     int connected;
     bool waiting_for_pong;
+    struct sockaddr_in addr;
     player_t player;
 } client_t;
 
@@ -64,6 +65,6 @@ void remove_client_quietly(server_state_t *state, int id);
 void broadcast_statistics(server_state_t *state);
 
 int find_free_slot(client_t clients[]);
-int add_client(server_state_t *state, int fd);
+int add_client(server_state_t *state, int fd, struct sockaddr_in *client_addr);
 void remove_client(server_state_t *state, int id);
 int player_name_in_use(const server_state_t *state, const char *name);
