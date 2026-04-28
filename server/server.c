@@ -1,3 +1,5 @@
+#define _POSIX_C_SOURCE 200809L
+
 #include "server.h"
 #include "handle_client.h"
 #include "game.h"
@@ -366,7 +368,7 @@ int add_client(server_state_t *state, int fd, struct sockaddr_in *client_addr)
         p->ready = false;
         p->last_move_tick = 0;
         p->speed = state->config.player_speed;
-        p->bomb_count = 10; // TODO: idk what bomb count to start with
+        p->bomb_count = START_BOMB_COUNT;
         p->bomb_radius = state->config.explosion_radius;
         p->bomb_timer_ticks = state->config.bomb_timer_ticks;
         p->row = state->config.start_row[free_idx];

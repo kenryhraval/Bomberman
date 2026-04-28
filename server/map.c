@@ -40,7 +40,6 @@ int load_map(const char *filename, server_state_t *server_state)
                     exit(EXIT_FAILURE);
                 }
                 server_state->bonuses = new_bonuses;
-                server_state->bonuses[server_state->bonus_count].active = true;
                 server_state->bonuses[server_state->bonus_count].row = r;
                 server_state->bonuses[server_state->bonus_count].col = c;
                 server_state->bonuses[server_state->bonus_count].type = (bonus_type_t)cell;

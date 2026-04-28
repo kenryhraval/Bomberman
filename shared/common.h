@@ -9,7 +9,7 @@
 #endif
 
 // from LSP_game_specs_2026
-#define START_BOMB_COUNT 1
+
 #define MAX_PLAYERS 8
 #define TICKS_PER_SECOND 20
 #define MAX_NAME_LEN 29
@@ -103,13 +103,12 @@ typedef struct PACKED
     uint16_t speed;
 
     // Used for rate-limiting moves based on player's speed
-    // If client does not need thi just leave it as 0
+    // If client does not need this just leave it as 0
     uint64_t last_move_tick;
 } player_t;
 
 typedef struct PACKED
 {
-    bool active;
     uint8_t owner_id;
     uint16_t row;
     uint16_t col;

@@ -16,13 +16,13 @@
 
 typedef struct {
     bomb_t source;
+    bool active;
     uint16_t* footprint;
     size_t footprint_size;
     uint16_t duration_ticks;
 } explosion_t;
 
 typedef struct {
-    bool active;
     uint16_t row, col;
     bonus_type_t type;
 } bonus_t;
@@ -40,7 +40,9 @@ typedef struct server_state {
     uint8_t player_count;
     client_t clients[MAX_PLAYERS];
     bomb_t bombs[MAX_BOMBS];
+    size_t bomb_count;
     explosion_t explosions[MAX_BOMBS];
+    size_t explosion_count;
     bonus_t *bonuses;
     size_t bonus_count;
     map_t map;

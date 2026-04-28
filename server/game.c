@@ -63,34 +63,39 @@ void game_tick(void *arg)
 
     // 2. update game state (move bombs, check win condition, etc)
 
-    // update bombs explosions
-    for (int i = 0; i < MAX_BOMBS; i++)
+    // update bombs
+    size_t i = 0;
+    while (i < state->bomb_count)
     {
-        if (!state->bombs[i].active)
-            continue;
-        state->bombs[i].timer_ticks--;
+        if (state->bombs[i].timer_ticks > 0)
+            state->bombs[i].timer_ticks--;
 
         if (state->bombs[i].timer_ticks == 0)
         {
-            explode(state, i);
+            explode(state, (int)i);
+
+            // do not increment i here
+            // explode() removes the bomb and may swap another bomb into this index
+        }
+        else
+        {
+            i++;
         }
     }
 
     // check for explosion end
     for (int i = 0; i < MAX_BOMBS; i++)
     {
-        if (!state->explosions[i].source.active)
+        if (!state->explosions[i].active)
             continue;
         state->explosions[i].duration_ticks--;
 
         if (state->explosions[i].duration_ticks == 0)
         {
             bomb_t* source = &state->explosions[i].source;
-            source->active = false;
-            broadcast_explosion_end(state,
-                                    source->row,
-                                    source->col,
-                                    source->radius);
+            state->explosions[i].active = false;
+            broadcast_explosion_end(state, source->row, source->col, source->radius);
+            
             free(state->explosions[i].footprint);
             state->explosions[i].footprint = NULL;
             state->explosions[i].footprint_size = 0;
@@ -101,63 +106,55 @@ void game_tick(void *arg)
 
 void maybe_spawn_bonus(server_state_t *state, uint16_t row, uint16_t col)
 {
+    // check if there is room for another bonus
+    if (state->bonus_count >= MAX_BONUSES)
+        return;
+
     // check if bonus should spawn
     double r = (double)(rand() % 100) / 100.0;
-    if (r < BLOCK_DESTROY_BONUS_CHANCE)
+    if (r >= BLOCK_DESTROY_BONUS_CHANCE)
+        return;
+
+    // create new bonus at the end of the packed bonus array
+    bonus_t *bonus = &state->bonuses[state->bonus_count];
+
+    bonus->row = row;
+    bonus->col = col;
+
+    int bonus_type = rand() % 4; // 4 bonus types
+    switch (bonus_type)
     {
-        // spawn bonus at the destroyed cell
-        bonus_t new_bonus;
-        new_bonus.active = true;
-        new_bonus.row = row;
-        new_bonus.col = col;
-        int bonus_type = rand() % 4; // 4 bonus types
-        switch (bonus_type)
-        {
-        case 0:
-            new_bonus.type = BONUS_BOMB_COUNT;
-            break;
-        case 1:
-            new_bonus.type = BONUS_RADIUS;
-            break;
-        case 2:
-            new_bonus.type = BONUS_SPEED;
-            break;
-        case 3:
-            new_bonus.type = BONUS_TIMER;
-            break;
-        }
-
-        // find empty slot in bonuses array and add new bonus
-        int free_slot = -1;
-        for (size_t i = 0; i < state->bonus_count; i++)
-        {
-            if (!state->bonuses[i].active)
-            {
-                free_slot = i;
-                break;
-            }
-        }
-        if (free_slot == -1)
-        {
-            perror("Failed to find empty slot for bonuses");
-            return;
-        }
-        state->bonuses[free_slot] = new_bonus;
-        state->bonus_count++;
-
-        uint16_t bonus_cell = make_cell_index(row, col, state->map.cols);
-        state->map.cells[bonus_cell] = new_bonus.type;
-        broadcast_bonus_available(state, new_bonus.type, bonus_cell);
-
+    case 0:
+        bonus->type = BONUS_BOMB_COUNT;
+        break;
+    case 1:
+        bonus->type = BONUS_RADIUS;
+        break;
+    case 2:
+        bonus->type = BONUS_SPEED;
+        break;
+    case 3:
+        bonus->type = BONUS_TIMER;
+        break;
     }
+
+    state->bonus_count++;
+
+    uint16_t bonus_cell = make_cell_index(row, col, state->map.cols);
+    state->map.cells[bonus_cell] = bonus->type;
+
+    broadcast_bonus_available(state, bonus->type, bonus_cell);
 }
+
 
 void calculate_explosion_footprint(server_state_t *state, explosion_t *expl)
 {   
+    uint16_t center_cell = make_cell_index((uint16_t)expl->source.row, (uint16_t)expl->source.col, state->map.cols);
+
     // explosion footprint always includes the center cell
     int idx = 0;
-    expl->footprint[idx++] = make_cell_index(expl->source.row, expl->source.col, state->map.cols);
-    
+    expl->footprint[idx++] = center_cell;
+
     // bomb propagation directions
     int dirs[4][2] = {{-1, 0}, {1, 0}, {0, -1}, {0, 1}};
 
@@ -175,14 +172,16 @@ void calculate_explosion_footprint(server_state_t *state, explosion_t *expl)
             if (row < 0 || row >= state->map.rows ||
                 col < 0 || col >= state->map.cols)
                 break;
+
+            uint16_t cell_idx = make_cell_index((uint16_t)row, (uint16_t)col, state->map.cols);
             
             // get cell type
-            uint8_t cell = state->map.cells[make_cell_index((uint16_t)row, (uint16_t)col, state->map.cols)];
+            uint8_t cell = state->map.cells[cell_idx];
 
             if (cell == HARD_BLOCK)
                 break;
             
-            expl->footprint[idx++] = make_cell_index((uint16_t)row, (uint16_t)col, state->map.cols);
+            expl->footprint[idx++] = cell_idx;
 
             // if we hit a soft block or bomb, explosion stops but it still affects that cell
             if (cell == SOFT_BLOCK || cell == BOMB)
@@ -195,25 +194,33 @@ void calculate_explosion_footprint(server_state_t *state, explosion_t *expl)
 
 void explode(server_state_t *state, int bomb_idx)
 {
-    bomb_t *bomb = &state->bombs[bomb_idx];
-    bomb->active = false;
+    if (bomb_idx < 0 || bomb_idx >= (int)state->bomb_count)
+        return;
+
+    // make a copy of the bomb before we remove it from the state
+    bomb_t bomb = state->bombs[bomb_idx];
+
+    if (bomb_idx < (int)state->bomb_count - 1)
+        state->bombs[bomb_idx] = state->bombs[state->bomb_count - 1];
+
+    state->bomb_count--;
 
     // mark bomb cell as empty
-    state->map.cells[make_cell_index(bomb->row, bomb->col, state->map.cols)] = EMPTY;
-    state->clients[bomb->owner_id].player.bomb_count++;
+    state->map.cells[make_cell_index(bomb.row, bomb.col, state->map.cols)] = EMPTY;
+    state->clients[bomb.owner_id].player.bomb_count++;
 
     // broadcast EXPLOSION_START to all clients
-    broadcast_explosion_start(state, bomb->row, bomb->col, bomb->radius);
+    broadcast_explosion_start(state, bomb.row, bomb.col, bomb.radius);
 
     // add explosion to the explosion state array
     for (int i = 0; i < MAX_BOMBS; i++)
     {
-        if (!state->explosions[i].source.active)
+        if (!state->explosions[i].active)
         {
-            state->explosions[i].source = *bomb;
+            state->explosions[i].active = true;
+            state->explosions[i].source = bomb; // copy bomb info to explosion source
 
-            
-            int max_cells_in_radius = bomb->radius * 4 + 1; // max cells in explosion footprint (cross-shaped)
+            int max_cells_in_radius = bomb.radius * 4 + 1; // max cells in explosion footprint (cross-shaped)
             state->explosions[i].footprint = malloc(max_cells_in_radius * sizeof(uint16_t));
             if (state->explosions[i].footprint == NULL)
             {
@@ -223,13 +230,15 @@ void explode(server_state_t *state, int bomb_idx)
 
             calculate_explosion_footprint(state, &state->explosions[i]);
 
-            state->explosions[i].duration_ticks = state->clients[bomb->owner_id].player.bomb_explosion_duration_ticks;
+            state->explosions[i].duration_ticks =
+                state->clients[bomb.owner_id].player.bomb_explosion_duration_ticks;
+
             break;
         }
     }
 
     // check inside the bomb
-    check_player_deaths(state, bomb->row, bomb->col, bomb->owner_id);
+    check_player_deaths(state, bomb.row, bomb.col, bomb.owner_id);
 
     // bomb propagation directions
     int dirs[4][2] = {{-1, 0}, {1, 0}, {0, -1}, {0, 1}};
@@ -237,11 +246,11 @@ void explode(server_state_t *state, int bomb_idx)
     // propagate bomb in 4 directions
     for (int d = 0; d < 4; d++)
     {
-        for (int r = 1; r <= bomb->radius; r++)
+        for (int r = 1; r <= bomb.radius; r++)
         {
             // calculate explosion cell coordinates
-            int row = (int)bomb->row + dirs[d][0] * r;
-            int col = (int)bomb->col + dirs[d][1] * r;
+            int row = (int)bomb.row + dirs[d][0] * r;
+            int col = (int)bomb.col + dirs[d][1] * r;
 
             // check map bounds
             if (row < 0 || row >= state->map.rows ||
@@ -263,7 +272,7 @@ void explode(server_state_t *state, int bomb_idx)
                 state->map.cells[idx] = EMPTY;
 
                 // update statistics and broadcast
-                state->stats[bomb->owner_id].blocks_destroyed++;
+                state->stats[bomb.owner_id].blocks_destroyed++;
                 broadcast_block_destroyed(state, make_cell_index(row, col, state->map.cols));
 
                 // check if bonus should spawn
@@ -273,14 +282,11 @@ void explode(server_state_t *state, int bomb_idx)
             }
             else if (cell == BOMB)
             {
-                // chain reaction with another bomb
-                for (int i = 0; i < MAX_BOMBS; i++)
+                for (size_t i = 0; i < state->bomb_count; i++)
                 {
-                    if (state->bombs[i].active &&
-                        state->bombs[i].row == row &&
-                        state->bombs[i].col == col)
+                    if (state->bombs[i].row == row && state->bombs[i].col == col)
                     {
-                        explode(state, i); // use recursion
+                        explode(state, (int)i); // use recursion
                         break;
                     }
                 }
@@ -289,7 +295,7 @@ void explode(server_state_t *state, int bomb_idx)
             else
             {
                 // if empty cell, check if player is there and kill them
-                check_player_deaths(state, row, col, bomb->owner_id);
+                check_player_deaths(state, row, col, bomb.owner_id);
             }
         }
     }
@@ -370,7 +376,7 @@ void handle_bomb(server_state_t *state, event_t *ev)
     if (!p->alive)
         return;
     if (p->bomb_count == 0)
-        return; // no bombs
+        return;
 
     uint16_t row = ev->data.cell / state->map.cols;
     uint16_t col = ev->data.cell % state->map.cols;
@@ -379,36 +385,31 @@ void handle_bomb(server_state_t *state, event_t *ev)
     if (p->row != row || p->col != col)
         return;
 
+    uint16_t bomb_cell = make_cell_index(row, col, state->map.cols);
+
     // check if cell is already occupied by a bomb
-    uint8_t cell = state->map.cells[make_cell_index(row, col, state->map.cols)];
-    if (cell == BOMB)
+    if (state->map.cells[bomb_cell] == BOMB)
         return;
 
-    // find free bomb slot
-    int slot = -1;
-    for (int i = 0; i < MAX_BOMBS; i++)
-    {
-        if (!state->bombs[i].active)
-        {
-            slot = i;
-            break;
-        }
-    }
-    if (slot < 0)
-        return; // no free bomb slots
+    // check if there is room for another bomb
+    if (state->bomb_count >= MAX_BOMBS)
+        return;
 
-    // init bomb
-    state->bombs[slot].active = true;
-    state->bombs[slot].owner_id = ev->player_id;
-    state->bombs[slot].row = row;
-    state->bombs[slot].col = col;
-    state->bombs[slot].radius = p->bomb_radius;
-    state->bombs[slot].timer_ticks = p->bomb_timer_ticks;
+    // init bomb at the end of the packed bomb array
+    bomb_t *bomb = &state->bombs[state->bomb_count];
+
+    bomb->owner_id = ev->player_id;
+    bomb->row = row;
+    bomb->col = col;
+    bomb->radius = p->bomb_radius;
+    bomb->timer_ticks = p->bomb_timer_ticks;
+
+    state->bomb_count++;
 
     // mark cell on map
-    state->map.cells[make_cell_index(row, col, state->map.cols)] = BOMB;
+    state->map.cells[bomb_cell] = BOMB;
 
-    // reduce players bomb count
+    // reduce player's bomb count
     p->bomb_count--;
 
     // broadcast BOMB to all clients
@@ -485,7 +486,7 @@ void handle_move(server_state_t *state, event_t *ev)
     // check if player enters an active explosion area
     for (int i = 0; i < MAX_BOMBS; i++)
     {
-        if (!state->explosions[i].source.active)
+        if (!state->explosions[i].active)
             continue;
 
         // check explosion footprint for target cell
@@ -495,6 +496,11 @@ void handle_move(server_state_t *state, event_t *ev)
             {
                 // player moves into explosion and dies
                 p->alive = false;
+
+                uint8_t killer_id = state->explosions[i].source.owner_id;
+                if (p->id != killer_id)
+                    state->stats[killer_id].kills++;
+
                 broadcast_death(state, p->id);
                 check_win_condition(state);
                 return;
@@ -513,38 +519,48 @@ void handle_move(server_state_t *state, event_t *ev)
     // check if player moved into a bonus
     for (size_t i = 0; i < state->bonus_count; i++)
     {
-        if (!state->bonuses[i].active)
-            continue;
-        if (state->bonuses[i].row == new_row && state->bonuses[i].col == new_col)
+        if (state->bonuses[i].row == new_row &&
+            state->bonuses[i].col == new_col)
         {
             // apply bonus effect
             switch (state->bonuses[i].type)
             {
             case BONUS_SPEED:
-                p->speed++;
+                if (p->speed < MAX_PLAYER_SPEED)
+                    p->speed++;
                 break;
             case BONUS_RADIUS:
-                p->bomb_radius++;
+                if (p->bomb_radius < MAX_BOMB_RADIUS)
+                    p->bomb_radius++;
                 break;
             case BONUS_TIMER:
-                p->bomb_explosion_duration_ticks += BOMB_EXPLOSION_BONUS_INCREASE_TICKS;
+                if (p->bomb_explosion_duration_ticks < MAX_BOMB_EXPLOSION_DURATION_TICKS)
+                    p->bomb_explosion_duration_ticks += BOMB_EXPLOSION_BONUS_INCREASE_TICKS;
                 break;
             case BONUS_BOMB_COUNT:
-                p->bomb_count++;
+                if (p->bomb_count < MAX_BOMBS_PER_PLAYER)
+                    p->bomb_count++;
                 break;
             default:
                 break;
             }
 
-            // deactivate bonus
-            state->bonuses[i].active = false;
-            state->map.cells[make_cell_index(new_row, new_col, state->map.cols)] = EMPTY;
+            uint16_t bonus_cell = make_cell_index(new_row, new_col, state->map.cols);
+
+            // remove bonus from map
+            state->map.cells[bonus_cell] = EMPTY;
 
             // update statistics
             state->stats[p->id].bonuses_collected++;
 
             // broadcast bonus collected
-            broadcast_bonus_collected(state, p->id, make_cell_index(new_row, new_col, state->map.cols));
+            broadcast_bonus_collected(state, p->id, bonus_cell);
+
+            // remove bonus from packed array by swapping with the last bonus
+            if (i < state->bonus_count - 1)
+                state->bonuses[i] = state->bonuses[state->bonus_count - 1];
+
+            state->bonus_count--;
 
             break;
         }

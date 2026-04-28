@@ -369,11 +369,8 @@ void sync_board_to_client(server_state_t *state, int idx)
     }
 
     // 4. active bombs
-    for (int i = 0; i < MAX_BOMBS; i++)
+    for (size_t i = 0; i < state->bomb_count; i++)
     {
-        if (!state->bombs[i].active)
-            continue;
-
         msg_generic_t header = {
             .msg_type = MSG_BOMB,
             .sender_id = state->bombs[i].owner_id,
@@ -394,7 +391,7 @@ void sync_board_to_client(server_state_t *state, int idx)
     // 5. active explosions (still burning)
     for (int i = 0; i < MAX_BOMBS; i++)
     {
-        if (!state->explosions[i].source.active)
+        if (!state->explosions[i].active)
             continue;
 
         bomb_t *src = &state->explosions[i].source;
@@ -416,9 +413,6 @@ void sync_board_to_client(server_state_t *state, int idx)
     // 6. bonuses lying on the map
     for (size_t i = 0; i < state->bonus_count; i++)
     {
-        if (!state->bonuses[i].active)
-            continue;
-
         msg_generic_t header = {
             .msg_type = MSG_BONUS_AVAILABLE,
             .sender_id = SERVER,
@@ -457,6 +451,7 @@ bool all_players_ready(server_state_t *state)
 void start_game(server_state_t *state)
 {
     memset(state->bombs, 0, sizeof(state->bombs));
+    state->bomb_count = 0;
     memset(state->explosions, 0, sizeof(state->explosions));
     state->current_tick = 0;
 
