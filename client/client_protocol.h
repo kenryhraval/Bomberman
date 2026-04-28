@@ -42,3 +42,8 @@ nosūta visiem klientiem “BOMB” paketi.
 */
 int send_bomb_attempt(int fd, uint8_t sender_id, const uint16_t row, const uint16_t col, const uint16_t map_cols);
 
+
+/*
+Šo ziņu klients sūta serverim, lai izvēlētos karti no piedāvātajām iespējām.
+*/
+int send_map_selected(int fd, uint8_t sender_id, uint8_t target_id, uint8_t map_id);

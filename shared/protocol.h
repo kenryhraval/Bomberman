@@ -97,7 +97,7 @@ typedef struct PACKED {
 
 typedef struct PACKED {
     uint8_t count;
-    msg_map_choice_entry_t entries[MAX_MAP_CHOICES];
+    client_map_choice_t entries[MAX_MAP_CHOICES];
 } msg_map_choices_t;
 
 typedef struct PACKED {

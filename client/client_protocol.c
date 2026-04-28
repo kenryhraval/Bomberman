@@ -59,3 +59,19 @@ int send_bomb_attempt(int fd, uint8_t sender_id, const uint16_t row, const uint1
     return 0;
 }
 
+
+int send_map_selected(int fd, uint8_t sender_id, uint8_t target_id, uint8_t map_id)
+{
+    msg_map_selected_t payload = {
+        .map_id = map_id,
+    };
+
+    if (send_header(fd, MSG_MAP_SELECTED, sender_id, target_id) < 0)
+        return -1;
+
+    if (write_exact(fd, &payload, sizeof(payload)) < 0)
+        return -1;
+
+    return 0;
+}
+

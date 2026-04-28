@@ -53,7 +53,7 @@ typedef struct server_state {
     pthread_mutex_t mutex;
     uint64_t current_tick;
     statistics_t stats[MAX_PLAYERS];
-    map_choice_t map_choices[MAX_MAP_CHOICES];
+    server_map_choice_t map_choices[MAX_MAP_CHOICES];
     uint8_t map_choice_count; // number of available map choices in map_choices array
     char selected_map_path[MAX_MAP_PATH_LEN]; // path to the selected map
 
