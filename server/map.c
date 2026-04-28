@@ -206,11 +206,8 @@ size_t scan_map_choices(const char *maps_dir, server_map_choice_t choices[], siz
 }
 
 
-int find_available_map_choices_and_send(server_state_t *state, int fd, uint8_t target_id)
+int send_available_map_choices(server_state_t *state, int fd, uint8_t target_id)
 {
-    if (state->map_choice_count == 0) 
-        state->map_choice_count = scan_map_choices(MAPS_DIR, state->map_choices, MAX_MAP_CHOICES);
-
     msg_map_choices_t choices_msg = {0};
     choices_msg.count = (uint8_t)state->map_choice_count;
 

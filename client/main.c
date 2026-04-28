@@ -3,12 +3,46 @@
 #include <string.h>
 #include <stdlib.h>
 #include <locale.h>
+#include <poll.h>
 
 #include "client.h"
 #include "draw.h"
 
 #define DEFAULT_IP "127.0.0.1"
 #define DEFAULT_PORT 6969
+
+
+static int client_check_early_disconnect(client_state_t *state)
+{
+    struct pollfd pfd = {
+        .fd = state->fd,
+        .events = POLLIN,
+        .revents = 0,
+    };
+
+    // give server a tiny moment to reject full lobby
+    int ret = poll(&pfd, 1, 200);
+    if (ret < 0)
+        return -1;
+
+    if (ret == 0)
+        return 0; // no early server message, continue normally
+
+    if (pfd.revents & POLLIN)
+    {
+        msg_generic_t header;
+
+        if (read_exact(state->fd, &header, sizeof(header)) < 0)
+            return -1;
+
+        if (header.msg_type == MSG_DISCONNECT)
+            return 1; // server rejected us before HELLO
+
+        return -1; // unexpected message before HELLO
+    }
+
+    return 0;
+}
 
 
 static int read_name_screen(char *player_name, size_t player_name_size)
@@ -116,19 +150,10 @@ int main(int argc, char *argv[])
     noecho();
     cbreak();
     keypad(stdscr, TRUE);
-    timeout(-1); // blocking input while entering name
+    timeout(-1);
     curs_set(1);
 
     draw_init_colors();
-
-    if (read_name_screen(player_name, sizeof(player_name)) < 0)
-    {
-        endwin();
-        return 0;
-    }
-
-    timeout(1000 / TICK_RATE);
-    curs_set(0);
 
     if (client_connect(&state, ip, port) < 0) {
         endwin();
@@ -136,21 +161,36 @@ int main(int argc, char *argv[])
         return 1;
     }
 
+    int early = client_check_early_disconnect(&state);
+    if (early == 1) {
+        endwin();
+        printf("Serveris ir pilns izvēlētajai kartei.\n");
+        client_close(&state);
+        return 1;
+    }
+    if (early < 0) {
+        endwin();
+        printf("Connection failed\n");
+        client_close(&state);
+        return 1;
+    }
+
+    if (read_name_screen(player_name, sizeof(player_name)) < 0)
+    {
+        endwin();
+        client_close(&state);
+        return 0;
+    }
+
+    timeout(1000 / TICK_RATE);
+    curs_set(0);
+
     if (client_handshake(&state, player_name) < 0) {
         endwin();
         printf("Handshake failed\n");
         client_close(&state);
         return 1;
     }
-
-    initscr();
-    noecho();
-    cbreak();
-    keypad(stdscr, TRUE);
-    timeout(1000 / TICK_RATE);
-    curs_set(0);
-
-    draw_init_colors();
 
     int running = 1;
     while (running) {
@@ -177,6 +217,44 @@ int main(int argc, char *argv[])
         }
 
         int ch = getch();
+
+        if (state.game_status == GAME_LOBBY && state.view == VIEW_MAP_SELECT) {
+            switch (ch) {
+                case 27: // Esc
+                    state.view = VIEW_LOBBY;
+                    break;
+
+                case KEY_UP:
+                    if (state.map_choice_count > 0) {
+                        if (state.selected_map_id == 0)
+                            state.selected_map_id = state.map_choice_count - 1;
+                        else
+                            state.selected_map_id--;
+                    }
+                    break;
+
+                case KEY_DOWN:
+                    if (state.map_choice_count > 0)
+                        state.selected_map_id = (state.selected_map_id + 1) % state.map_choice_count;
+                    break;
+
+                case '\n':
+                case KEY_ENTER:
+                    if (state.map_choice_count > 0) {
+                        send_map_selected(state.fd, state.my_id, SERVER, state.selected_map_id);
+                        state.view = VIEW_LOBBY;
+                    }
+                    break;
+
+                case 'x':
+                case 'X':
+                    running = 0;
+                    break;
+            }
+
+            continue;
+        }
+
         switch (ch) {
             case 'x':
             case 'X':
@@ -234,43 +312,6 @@ int main(int argc, char *argv[])
                     state.view = VIEW_MAP_SELECT;
                 }
                 break;
-        }
-
-        if (state.game_status == GAME_LOBBY && state.view == VIEW_MAP_SELECT) {
-            switch (ch) {
-                case 27: // Esc
-                    state.view = VIEW_LOBBY;
-                    break;
-
-                case KEY_UP:
-                    if (state.map_choice_count > 0) {
-                        if (state.selected_map_id == 0)
-                            state.selected_map_id = state.map_choice_count - 1;
-                        else
-                            state.selected_map_id--;
-                    }
-                    break;
-
-                case KEY_DOWN:
-                    if (state.map_choice_count > 0)
-                        state.selected_map_id = (state.selected_map_id + 1) % state.map_choice_count;
-                    break;
-
-                case '\n':
-                case KEY_ENTER:
-                    if (state.map_choice_count > 0) {
-                        send_map_selected(state.fd, state.my_id, SERVER, state.selected_map_id);
-                        state.view = VIEW_LOBBY;
-                    }
-                    break;
-
-                case 'x':
-                case 'X':
-                    running = 0;
-                    break;
-            }
-
-            continue;
         }
     }
 

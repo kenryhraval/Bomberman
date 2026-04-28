@@ -220,6 +220,7 @@ void *client_loop(void *args)
                 break;
 
             snprintf(state->selected_map_path, sizeof(state->selected_map_path), "%s", state->map_choices[payload.map_id].path);
+            state->selected_map_id = payload.map_id;
 
             break;
         }

@@ -38,7 +38,7 @@ typedef struct {
 
 typedef struct server_state {
     game_status_t game_status;
-    int initiator_id; // -1 if no initiator yet
+    uint8_t initiator_id; // 255 if no initiator yet
     uint8_t player_count;
     client_t clients[MAX_PLAYERS];
     bomb_t bombs[MAX_BOMBS];
@@ -55,12 +55,13 @@ typedef struct server_state {
     statistics_t stats[MAX_PLAYERS];
     server_map_choice_t map_choices[MAX_MAP_CHOICES];
     uint8_t map_choice_count; // number of available map choices in map_choices array
+    uint8_t selected_map_id; // index of the selected map in map_choices array
     char selected_map_path[MAX_MAP_PATH_LEN]; // path to the selected map
 
     bool server_running; // used to signal threads to exit when server is shutting down
 } server_state_t;
 
-int serve_main(int argc, char *argv[]);
+int serve_main();
 void main_cleanup(server_state_t *state);    
 void close_all_client_fds(server_state_t *state);
 void signal_handler(int signum);

@@ -13,8 +13,6 @@
 #define MAX_BOMB_EXPLOSION_DURATION_TICKS 100
 
 /* Server Configurations */
-#define MAP_ARGUMENT "--map"
-#define MAP_FILENAME_DEFAULT "maps/map-small-1.txt"
 #define CLIENT_TIMEOUT_SECONDS 30
 
 #define PORT 6969

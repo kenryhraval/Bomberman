@@ -40,7 +40,8 @@ int player_name_in_use(const server_state_t *state, const char *name)
     return 0;
 }
 
-int serve_main(int argc, char *argv[])
+
+int serve_main()
 {
     int server_fd, client_fd;
     struct sockaddr_in remote_address;
@@ -51,6 +52,19 @@ int serve_main(int argc, char *argv[])
     server_state.game_status = GAME_LOBBY;
     server_state.server_running = true;
     server_state.initiator_id = 255;  // no initiator yet
+
+    // scan maps dir at startup to populate map choices, so we can send the list to the initiator
+    server_state.map_choice_count = scan_map_choices(MAPS_DIR, server_state.map_choices, MAX_MAP_CHOICES);
+
+    if (server_state.map_choice_count == 0)
+    {
+        printf("No valid maps found in %s\n", MAPS_DIR);
+        return 1;
+    }
+
+    // first available map is the default
+    server_state.selected_map_id = 0;
+    snprintf(server_state.selected_map_path, sizeof(server_state.selected_map_path), "%s", server_state.map_choices[0].path);
 
     init_event_queue(&server_state.queue);
     pthread_mutex_init(&server_state.mutex, NULL);
@@ -73,22 +87,9 @@ int serve_main(int argc, char *argv[])
         perror("sigaction SIGTERM");
         return 1;
     }
+
     // set global pointer for signal handler access
     global_server_state = &server_state;
-
-    // get --map argument
-    const char *map_filename = MAP_FILENAME_DEFAULT;
-    for (int i = 1; i < argc - 1; i++)
-    {
-        if (strcmp(argv[i], MAP_ARGUMENT) == 0)
-        {
-            map_filename = argv[i + 1];
-            break;
-        }
-    }
-
-    // save map path, it will be read when the game starts
-    snprintf(server_state.selected_map_path, sizeof(server_state.selected_map_path), "%s", map_filename);
 
     // 1. create socket
     server_fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -144,9 +145,24 @@ int serve_main(int argc, char *argv[])
             continue;
         }
 
+
+        // check if selected map can support another player before accepting connection
         pthread_mutex_lock(&server_state.mutex);
+
+        if (server_state.player_count >= server_state.map_choices[server_state.selected_map_id].supported_players)
+        {
+            pthread_mutex_unlock(&server_state.mutex);
+
+            printf("Selected map is full, rejecting connection before HELLO\n");
+            send_disconnect(client_fd, SERVER, 255);
+            close(client_fd);
+            continue;
+        }
+
         int free_idx = add_client(&server_state, client_fd, &client_addr);
+
         pthread_mutex_unlock(&server_state.mutex);
+
 
         if (free_idx < 0)
             continue; // rejected
@@ -305,9 +321,9 @@ int add_client(server_state_t *state, int fd, struct sockaddr_in *client_addr)
         }
     }
 
-    int free_idx = is_reconnecting
-                       ? reconnect_idx
-                       : find_free_slot(state->clients);
+    // find free slot in the sparse client array, or the reconnecting client's slot
+    int free_idx = is_reconnecting ? reconnect_idx : find_free_slot(state->clients);
+
     if (free_idx < 0)
     {
         printf("Server full, rejecting client\n");
@@ -315,10 +331,6 @@ int add_client(server_state_t *state, int fd, struct sockaddr_in *client_addr)
         close(fd);
         return -1;
     }
-
-    // first client is the initiator
-    if (!is_reconnecting && state->initiator_id == 255)
-        state->initiator_id = free_idx;
 
     // check client version compatibility
     // commented as we want to allow other client versions to connect
@@ -347,6 +359,10 @@ int add_client(server_state_t *state, int fd, struct sockaddr_in *client_addr)
         close(fd);
         return -1;
     }
+
+    // first client is the initiator
+    if (!is_reconnecting && state->initiator_id == 255)
+        state->initiator_id = free_idx;
 
     client_t *c = &state->clients[free_idx];
     player_t *p = &state->clients[free_idx].player;
@@ -411,7 +427,7 @@ int add_client(server_state_t *state, int fd, struct sockaddr_in *client_addr)
     // and the client's version supports it
     if (free_idx == state->initiator_id && strcmp(c->version, CLIENT_ID) >= 0)
     {
-        if (find_available_map_choices_and_send(state, fd, free_idx) < 0) {
+        if (send_available_map_choices(state, fd, free_idx) < 0) {
             printf("Failed to send map choices to initiator\n");
             remove_client_quietly(state, free_idx);
             return -1;
