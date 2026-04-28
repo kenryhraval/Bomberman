@@ -285,6 +285,14 @@ int client_poll_network(client_state_t *state)
             if (send_pong(state->fd, state->my_id, SERVER) < 0)
                 return -1;
                 
+        } else if (header.msg_type == MSG_MAP_CHOICES) {
+            msg_map_choices_t payload;
+
+            if (read_exact(state->fd, &payload, sizeof(payload)) < 0)
+                return -1;
+
+            // TODO: store/display choices later
+            
         } else {
             return -1; // nezināms ziņas tips
         }

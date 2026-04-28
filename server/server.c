@@ -3,6 +3,7 @@
 #include "server.h"
 #include "handle_client.h"
 #include "game.h"
+#include "map.h"
 
 #include <arpa/inet.h>
 #include <pthread.h>
@@ -49,6 +50,7 @@ int serve_main(int argc, char *argv[])
     memset(&server_state, 0, sizeof(server_state));
     server_state.game_status = GAME_LOBBY;
     server_state.server_running = true;
+    server_state.initiator_id = 255;  // no initiator yet
 
     init_event_queue(&server_state.queue);
     pthread_mutex_init(&server_state.mutex, NULL);
@@ -85,18 +87,8 @@ int serve_main(int argc, char *argv[])
         }
     }
 
-    // load map and config
-    if (load_map(map_filename, &server_state) < 0)
-    {
-        perror("Failed to load map");
-        return 1;
-    }
-
-    // set bomb_explosion_duration_ticks for each player based on config
-    for (int i = 0; i < MAX_PLAYERS; i++)
-    {
-        server_state.clients[i].player.bomb_explosion_duration_ticks = server_state.config.explosion_duration_ticks;
-    }
+    // save map path, it will be read when the game starts
+    snprintf(server_state.selected_map_path, sizeof(server_state.selected_map_path), "%s", map_filename);
 
     // 1. create socket
     server_fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -180,6 +172,7 @@ int serve_main(int argc, char *argv[])
     return 0;
 }
 
+
 void close_all_client_fds(server_state_t *state)
 {
     for (int i = 0; i < MAX_PLAYERS; i++)
@@ -192,10 +185,9 @@ void close_all_client_fds(server_state_t *state)
     }
 }
 
+
 void main_cleanup(server_state_t *state)
 {
-    free(state->bonuses);
-    state->bonuses = NULL;
     state->bonus_count = 0;
 
     for (int i = 0; i < MAX_BOMBS; i++)
@@ -220,6 +212,7 @@ void main_cleanup(server_state_t *state)
     printf("Server shutdown complete.\n");
 }
 
+
 int find_free_slot(client_t clients[])
 {
     for (int i = 0; i < MAX_PLAYERS; i++)
@@ -231,6 +224,7 @@ int find_free_slot(client_t clients[])
     }
     return -1;
 }
+
 
 int add_client(server_state_t *state, int fd, struct sockaddr_in *client_addr)
 {
@@ -280,6 +274,7 @@ int add_client(server_state_t *state, int fd, struct sockaddr_in *client_addr)
 
     bool is_reconnecting = false;
     int reconnect_idx = -1;
+
     // check if game is already in progress
     if (state->game_status != GAME_LOBBY)
     {
@@ -321,14 +316,19 @@ int add_client(server_state_t *state, int fd, struct sockaddr_in *client_addr)
         return -1;
     }
 
+    // first client is the initiator
+    if (!is_reconnecting && state->initiator_id == 255)
+        state->initiator_id = free_idx;
+
     // check client version compatibility
-    if (strncmp(hello_client_id, CLIENT_ID, MAX_CLIENT_ID_LEN) != 0)
-    {
-        printf("Unsupported client version: %s\n", hello_client_id);
-        send_disconnect(fd, SERVER, 255); // TODO: Idk if 255 here is correct
-        close(fd);
-        return -1;
-    }
+    // commented as we want to allow other client versions to connect
+    // if (strncmp(hello_client_id, CLIENT_ID, MAX_CLIENT_ID_LEN) != 0)
+    // {
+    //     printf("Unsupported client version: %s\n", hello_client_id);
+    //     send_disconnect(fd, SERVER, 255); // TODO: Idk if 255 here is correct
+    //     close(fd);
+    //     return -1;
+    // }
 
     // check for empty player name
     if (hello_player_name[0] == '\0')
@@ -351,10 +351,16 @@ int add_client(server_state_t *state, int fd, struct sockaddr_in *client_addr)
     client_t *c = &state->clients[free_idx];
     player_t *p = &state->clients[free_idx].player;
 
+    // player id must always match the slot
+    p->id = free_idx;
+
     // 2. register client
     c->fd = fd;
     c->connected = true;
     memcpy(&c->addr, client_addr, sizeof(struct sockaddr_in));
+    // save client version
+    strncpy(c->version, hello_client_id, MAX_CLIENT_ID_LEN);
+    c->version[MAX_CLIENT_ID_LEN] = '\0';
 
     if (is_reconnecting)
     {
@@ -363,17 +369,10 @@ int add_client(server_state_t *state, int fd, struct sockaddr_in *client_addr)
     }
     else
     {
-        p->id = free_idx;
-        p->alive = true;
         p->ready = false;
         p->last_move_tick = 0;
-        p->speed = state->config.player_speed;
-        p->bomb_count = START_BOMB_COUNT;
-        p->bomb_radius = state->config.explosion_radius;
-        p->bomb_timer_ticks = state->config.bomb_timer_ticks;
-        p->row = state->config.start_row[free_idx];
-        p->col = state->config.start_col[free_idx];
-
+        p->alive = true;
+        
         strncpy(p->name, hello_player_name, MAX_NAME_LEN);
         p->name[MAX_NAME_LEN] = '\0';
     }
@@ -398,8 +397,8 @@ int add_client(server_state_t *state, int fd, struct sockaddr_in *client_addr)
             k++;
         }
     }
-    int res = send_welcome(fd, free_idx, free_idx, &welcome);
-    if (res < 0)
+
+    if (send_welcome(fd, free_idx, free_idx, &welcome) < 0)
     {
         printf("Failed to send WELCOME\n");
         remove_client_quietly(state, free_idx);
@@ -408,13 +407,27 @@ int add_client(server_state_t *state, int fd, struct sockaddr_in *client_addr)
 
     printf("Sent WELCOME to player %s (id=%d)\n", p->name, p->id);
 
+    // send map configureation choices if this client is the initiator
+    // and the client's version supports it
+    if (free_idx == state->initiator_id && strcmp(c->version, CLIENT_ID) >= 0)
+    {
+        if (find_available_map_choices_and_send(state, fd, free_idx) < 0) {
+            printf("Failed to send map choices to initiator\n");
+            remove_client_quietly(state, free_idx);
+            return -1;
+        }
+    }
+
+
     // 4. inform all other clients about the new player
     // just retranslate HELLo message to all clients
     broadcast_hello(state, free_idx, &hello);
 
     printf("Broadcasted HELLO of player %s (id=%d) to other clients\n", p->name, p->id);
 
-    // Serveris ir tiesīgs nosūtīt šo ziņu arī tad, ja attiecīgais klients nav tādu nosūtījis, tādējādi “piespiedu kārtā” padarot to par spēlētāju. Tā var īstenot, piemēram, iespēju pieslēgties pēc savienojuma pazušanas spēles laikā.
+    // Serveris ir tiesīgs nosūtīt šo ziņu arī tad, ja attiecīgais klients nav tādu nosūtījis, 
+    // tādējādi “piespiedu kārtā” padarot to par spēlētāju. 
+    // Tā var īstenot, piemēram, iespēju pieslēgties pēc savienojuma pazušanas spēles laikā.
     if (is_reconnecting)
     {
         printf("Player %s (id=%d) is reconnecting, setting ready state to true\n", p->name, p->id);
@@ -429,6 +442,7 @@ int add_client(server_state_t *state, int fd, struct sockaddr_in *client_addr)
     return free_idx;
 }
 
+
 void remove_client_quietly(server_state_t *state, int id)
 {
     close(state->clients[id].fd);
@@ -438,6 +452,10 @@ void remove_client_quietly(server_state_t *state, int id)
     state->clients[id].player.ready = 0;
 
     state->player_count--;
+
+    // if the initiator left, end game
+    if (id == state->initiator_id)
+        state->server_running = false;
 }
 
 void remove_client(server_state_t *state, int id)
@@ -452,4 +470,8 @@ void remove_client(server_state_t *state, int id)
     state->clients[id].player.ready = 0;
 
     state->player_count--;
+
+    // if the initiator left, end game
+    if (id == state->initiator_id) 
+        state->server_running = false;
 }

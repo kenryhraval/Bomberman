@@ -192,6 +192,7 @@ void calculate_explosion_footprint(server_state_t *state, explosion_t *expl)
     expl->footprint_size = idx;
 }
 
+
 void explode(server_state_t *state, int bomb_idx)
 {
     if (bomb_idx < 0 || bomb_idx >= (int)state->bomb_count)
@@ -273,7 +274,7 @@ void explode(server_state_t *state, int bomb_idx)
 
                 // update statistics and broadcast
                 state->stats[bomb.owner_id].blocks_destroyed++;
-                broadcast_block_destroyed(state, make_cell_index(row, col, state->map.cols));
+                broadcast_block_destroyed(state, idx);
 
                 // check if bonus should spawn
                 maybe_spawn_bonus(state, row, col);
@@ -514,7 +515,7 @@ void handle_move(server_state_t *state, event_t *ev)
     p->last_move_tick = state->current_tick;
 
     // broadcast MOVED
-    broadcast_move(state, ev->player_id, make_cell_index(new_row, new_col, state->map.cols));
+    broadcast_moved(state, ev->player_id, make_cell_index(new_row, new_col, state->map.cols));
 
     // check if player moved into a bonus
     for (size_t i = 0; i < state->bonus_count; i++)

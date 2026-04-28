@@ -14,7 +14,7 @@
 
 /* Server Configurations */
 #define MAP_ARGUMENT "--map"
-#define MAP_FILENAME_DEFAULT "map.txt"
+#define MAP_FILENAME_DEFAULT "maps/map-small-1.txt"
 #define CLIENT_TIMEOUT_SECONDS 30
 
 #define PORT 6969

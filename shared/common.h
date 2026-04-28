@@ -20,6 +20,24 @@
 #define MAX_MAP_COLS 255
 #define TICK_RATE 20
 
+// for map configuration sent to initiator
+#define MAX_MAP_CHOICES 16
+#define MAX_MAP_NAME_LEN 64
+
+typedef struct PACKED {
+    uint8_t id;
+    char name[MAX_MAP_NAME_LEN];
+    uint8_t rows;
+    uint8_t cols;
+    uint8_t supported_players;
+    uint16_t player_speed;
+    uint16_t explosion_duration_ticks;
+    uint8_t explosion_radius;
+    uint16_t bomb_timer_ticks;
+} msg_map_choice_entry_t;
+
+
+// cell types for the map
 typedef enum {
     HARD_BLOCK = 'H',
     SOFT_BLOCK = 'S',
@@ -28,16 +46,21 @@ typedef enum {
     SPEED_BONUS = 'A',
     BOMB_RADIUS_BONUS = 'R',
     BOMB_TIMER_BONUS = 'T',
+    BOMB_COUNT_BONUS = 'N',
     PLAYER_1 = '1',
     PLAYER_LAST = '1' + MAX_PLAYERS - 1,
 } cell_type_t;
 
+
+// map structure
 typedef struct {
     uint8_t rows;
     uint8_t cols;
     uint8_t cells[MAX_MAP_ROWS * MAX_MAP_COLS];
 } map_t;
 
+
+// game statuses
 typedef enum
 {
     GAME_LOBBY = 0,
@@ -45,6 +68,8 @@ typedef enum
     GAME_END = 2
 } game_status_t;
 
+
+// move directions
 typedef enum
 {
     DIR_UP = 'U',
@@ -53,6 +78,8 @@ typedef enum
     DIR_RIGHT = 'R'
 } direction_t;
 
+
+// bonus types
 typedef enum
 {
     BONUS_NONE = '\0',
@@ -62,6 +89,8 @@ typedef enum
     BONUS_BOMB_COUNT = 'N'
 } bonus_type_t;
 
+
+// message types
 typedef enum
 {
     MSG_HELLO = 0,
@@ -85,9 +114,13 @@ typedef enum
     MSG_BONUS_AVAILABLE = 45,
     MSG_BONUS_RETRIEVED = 46,
     MSG_BLOCK_DESTROYED = 47,
-    MSG_STATISTICS = 100
+    MSG_STATISTICS = 100,
+    MSG_MAP_CHOICES = 101,
+    MSG_MAP_SELECTED = 102,
 } msg_type_t;
 
+
+// player structure
 typedef struct PACKED
 {
     uint8_t id;
@@ -107,6 +140,8 @@ typedef struct PACKED
     uint64_t last_move_tick;
 } player_t;
 
+
+// bomb structure
 typedef struct PACKED
 {
     uint8_t owner_id;
@@ -116,6 +151,8 @@ typedef struct PACKED
     uint16_t timer_ticks;
 } bomb_t;
 
+
+// statistics for end of the game structure
 typedef struct PACKED
 {
     uint8_t kills;
@@ -123,6 +160,8 @@ typedef struct PACKED
     uint16_t bonuses_collected;
 } statistics_t;
 
+
+// helper function to convert row and col to cell index in the map's cells array
 static inline uint16_t make_cell_index(uint16_t row, uint16_t col, uint16_t cols)
 {
     return row * cols + col;

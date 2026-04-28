@@ -95,6 +95,15 @@ typedef struct PACKED {
     statistics_t stats;
 } msg_statistics_t;
 
+typedef struct PACKED {
+    uint8_t count;
+    msg_map_choice_entry_t entries[MAX_MAP_CHOICES];
+} msg_map_choices_t;
+
+typedef struct PACKED {
+    uint8_t map_id;
+} msg_map_selected_t;
+
 
 /*
  * Reads exactly `count` bytes from file descriptor `fd` into buffer `buf`.

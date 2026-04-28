@@ -8,6 +8,7 @@
 
 #include "handle_client.h"
 #include "event_queue.h"
+#include "broadcasts.h"
 
 void watchdog_handler(union sigval sv)
 {
@@ -116,19 +117,21 @@ void *client_loop(void *args)
         case MSG_LEAVE:
         {
             remove_client(state, idx);
+            exit_thread = true;
             break;
         }
 
         case MSG_SET_READY:
         {
+            if (state->game_status != GAME_LOBBY)
+                break;
+
             state->clients[idx].player.ready = true;
             broadcast_set_ready(state, idx);
 
             // check if all player ready to start game
-            if (state->game_status == GAME_LOBBY && all_players_ready(state))
-            {
+            if (all_players_ready(state))
                 start_game(state);
-            }
 
             break;
         }
@@ -197,6 +200,30 @@ void *client_loop(void *args)
             break;
         }
 
+        case MSG_MAP_SELECTED:
+        {
+            if (state->game_status != GAME_LOBBY)
+                break;
+
+            if (idx != state->initiator_id)
+                break;
+
+            msg_map_selected_t payload;
+            if (read_exact(fd, &payload, sizeof(payload)) < 0)
+            {
+                remove_client(state, idx);
+                exit_thread = true;
+                break; // exit thread
+            }
+            
+            if (payload.map_id >= state->map_choice_count)
+                break;
+
+            snprintf(state->selected_map_path, sizeof(state->selected_map_path), "%s", state->map_choices[payload.map_id].path);
+
+            break;
+        }
+
         default:
             printf("Unhandled msg %u from client %d\n", header.msg_type, idx);
         }
@@ -224,105 +251,6 @@ void *client_loop(void *args)
     return NULL;
 }
 
-void broadcast_hello(server_state_t *state, int sender_idx, const msg_hello_t *hello)
-{
-    for (int i = 0; i < MAX_PLAYERS; i++)
-    {
-        if (state->clients[i].connected && i != sender_idx)
-        {
-            // vienīgais veids, kā nodot jaunā sender_idx,
-            // ir iestatot sender_id kā apraides avotu
-            send_hello(state->clients[i].fd, sender_idx, BROADCAST, hello);
-        }
-    }
-}
-
-void broadcast_set_ready(server_state_t *state, int sender_idx)
-{
-    msg_generic_t header = {
-        .msg_type = MSG_SET_READY,
-        .sender_id = sender_idx,
-        .target_id = -1,
-    };
-
-    for (int i = 0; i < MAX_PLAYERS; i++)
-    {
-        if (state->clients[i].connected)
-        {
-            header.target_id = state->clients[i].player.id;
-            write_exact(state->clients[i].fd, &header, sizeof(header));
-        }
-    }
-}
-
-void broadcast_leave(server_state_t *state, int sender_idx)
-{
-    msg_generic_t header = {
-        .msg_type = MSG_LEAVE,
-        .sender_id = sender_idx,
-        .target_id = BROADCAST};
-
-    for (int i = 0; i < MAX_PLAYERS; i++)
-    {
-        if (state->clients[i].connected && i != sender_idx)
-        {
-            write_exact(state->clients[i].fd, &header, sizeof(header));
-        }
-    }
-}
-
-void broadcast_set_game_status(server_state_t *state, game_status_t status)
-{
-    msg_set_status_t payload = {
-        .game_status = status,
-    };
-
-    msg_generic_t header = {
-        .msg_type = MSG_SET_STATUS,
-        .sender_id = SERVER,
-        .target_id = BROADCAST,
-    };
-
-    for (int i = 0; i < MAX_PLAYERS; i++)
-    {
-        if (state->clients[i].connected)
-        {
-            write_exact(state->clients[i].fd, &header, sizeof(header));
-            write_exact(state->clients[i].fd, &payload, sizeof(payload));
-        }
-    }
-}
-
-void broadcast_map(server_state_t *state)
-{
-    msg_map_t map_msg = {
-        .height = state->map.rows,
-        .width = state->map.cols};
-
-    for (int i = 0; i < MAX_PLAYERS; i++)
-    {
-        if (!state->clients[i].connected)
-            continue;
-
-        // abstrakcijai visur vajadzētu send_x izmantot
-        send_map(state->clients[i].fd, SERVER, BROADCAST, &map_msg, state->map.cells);
-    }
-}
-
-void broadcast_moved(server_state_t *state, uint8_t player_id, uint16_t cell)
-{
-    msg_moved_t moved_msg = {
-        .player_id = player_id,
-        .cell = htons(cell)};
-
-    for (int i = 0; i < MAX_PLAYERS; i++)
-    {
-        if (!state->clients[i].connected)
-            continue;
-
-        send_moved(state->clients[i].fd, SERVER, state->clients[i].player.id, &moved_msg);
-    }
-}
 
 // Send the full running-game state to a single client, using only
 // existing protocol messages. Used after a mid-game reconnect so the
@@ -439,11 +367,9 @@ void sync_board_to_client(server_state_t *state, int idx)
     }
 }
 
+
 bool all_players_ready(server_state_t *state)
 {
-    if (state->player_count < 2)
-        return false;
-
     if (state->player_count < 2)
         return false;
 
@@ -456,13 +382,27 @@ bool all_players_ready(server_state_t *state)
     return true;
 }
 
+
 void start_game(server_state_t *state)
 {
+    // no bombs, explosions, bonuses, or stats at the start
     memset(state->bombs, 0, sizeof(state->bombs));
     state->bomb_count = 0;
     memset(state->explosions, 0, sizeof(state->explosions));
     state->current_tick = 0;
+    memset(state->bonuses, 0, sizeof(state->bonuses));
+    state->bonus_count = 0;
+    memset(state->stats, 0, sizeof(state->stats));
 
+    // load selected map only when the game starts
+    // load the state configuration used in the loop below
+    if (load_map(state->selected_map_path, state) < 0)
+    {
+        perror("Failed to load selected map");
+        return;
+    }
+
+    // change game status to running
     state->game_status = GAME_RUNNING;
 
     // set all players to alive and put them on start positions
@@ -470,6 +410,7 @@ void start_game(server_state_t *state)
     {
         if (!state->clients[i].connected)
             continue;
+
         player_t *p = &state->clients[i].player;
         p->alive = true;
         p->row = state->config.start_row[i];
@@ -477,6 +418,8 @@ void start_game(server_state_t *state)
         p->bomb_count = START_BOMB_COUNT;
         p->bomb_radius = state->config.explosion_radius;
         p->bomb_timer_ticks = state->config.bomb_timer_ticks;
+        p->bomb_explosion_duration_ticks = state->config.explosion_duration_ticks;
+        p->speed = state->config.player_speed;
 
         // set last_move_tick so that first player move is allowed immediately at game start
         if (p->speed > 0)

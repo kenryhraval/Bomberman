@@ -48,3 +48,15 @@ int send_moved(int fd, uint8_t sender_id, uint8_t target_id, const msg_moved_t *
 
     return 0;
 }
+
+
+int send_map_choices(int fd, uint8_t sender_id, uint8_t target_id, const msg_map_choices_t *msg)
+{
+    if (send_header(fd, MSG_MAP_CHOICES, sender_id, target_id) < 0)
+        return -1;
+
+    if (write_exact(fd, msg, sizeof(*msg)) < 0)
+        return -1;
+
+    return 0;
+}

@@ -39,3 +39,8 @@ jaunu šūnu.
 */
 int send_moved(int fd, uint8_t sender_id, uint8_t target_id, const msg_moved_t *msg);
 
+/*
+Šo ziņu serveris sūta iniciatoram, lai informētu par kartes konfigurācijas izvēli. 
+Iniciators pēc šīs ziņas saņemšanas var nosūtīt MAP_SELECTED ziņu ar izvēlēto karti.
+*/
+int send_map_choices(int fd, uint8_t sender_id, uint8_t target_id, const msg_map_choices_t *msg);
