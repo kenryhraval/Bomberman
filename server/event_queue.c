@@ -20,7 +20,7 @@ void cleanup_event_queue(event_queue_t *queue)
     queue->count = 0;
 }
 
-int enqueue_event(event_queue_t *queue, event_t *event)
+int enqueue_event(event_queue_t *queue, const event_t *event)
 {
     pthread_mutex_lock(&queue->mutex);
     if (queue->count < EVENT_QUEUE_SIZE)

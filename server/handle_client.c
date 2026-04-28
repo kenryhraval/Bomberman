@@ -255,7 +255,7 @@ void *client_loop(void *args)
 // Send the full running-game state to a single client, using only
 // existing protocol messages. Used after a mid-game reconnect so the
 // returning client rebuilds map, players, bombs, explosions, and bonuses.
-void sync_board_to_client(server_state_t *state, int idx)
+void sync_board_to_client(const server_state_t *state, int idx)
 {
     int fd = state->clients[idx].fd;
 
@@ -273,7 +273,7 @@ void sync_board_to_client(server_state_t *state, int idx)
         if (!state->clients[i].connected)
             continue;
 
-        player_t *p = &state->clients[i].player;
+        const player_t *p = &state->clients[i].player;
         msg_moved_t moved = {
             .player_id = p->id,
             .cell = htons(make_cell_index(p->row, p->col, state->map.cols)),
@@ -330,7 +330,7 @@ void sync_board_to_client(server_state_t *state, int idx)
         if (!state->explosions[i].active)
             continue;
 
-        bomb_t *src = &state->explosions[i].source;
+        const bomb_t *src = &state->explosions[i].source;
         msg_generic_t header = {
             .msg_type = MSG_EXPLOSION_START,
             .sender_id = SERVER,
@@ -368,7 +368,7 @@ void sync_board_to_client(server_state_t *state, int idx)
 }
 
 
-bool all_players_ready(server_state_t *state)
+bool all_players_ready(const server_state_t *state)
 {
     if (state->player_count < 2)
         return false;

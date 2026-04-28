@@ -2,10 +2,6 @@
 
 #include "client.h"
 
-#define TILE_H 3
-#define TILE_W 7
-#define LOBBY_NAME_COL_W 28
-
 #define C_READY      1
 #define C_NOT_READY  2
 #define C_WALL       3

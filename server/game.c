@@ -147,7 +147,7 @@ void maybe_spawn_bonus(server_state_t *state, uint16_t row, uint16_t col)
 }
 
 
-void calculate_explosion_footprint(server_state_t *state, explosion_t *expl)
+void calculate_explosion_footprint(const server_state_t *state, explosion_t *expl)
 {   
     uint16_t center_cell = make_cell_index((uint16_t)expl->source.row, (uint16_t)expl->source.col, state->map.cols);
 
@@ -370,7 +370,7 @@ void check_win_condition(server_state_t *state)
 }
 
 
-void handle_bomb(server_state_t *state, event_t *ev)
+void handle_bomb(server_state_t *state, const event_t *ev)
 {
     player_t *p = &state->clients[ev->player_id].player;
 
@@ -418,7 +418,7 @@ void handle_bomb(server_state_t *state, event_t *ev)
 }
 
 
-void handle_move(server_state_t *state, event_t *ev)
+void handle_move(server_state_t *state, const event_t *ev)
 {
     client_t *client = &state->clients[ev->player_id];
     player_t *p = &client->player;

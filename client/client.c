@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <poll.h>
+#include "configs.h"
 
 #include "client.h"
 #include "helpers.h"
@@ -40,7 +41,7 @@ int client_handshake(client_state_t *state, const char *player_name)
     msg_generic_t header;
     msg_welcome_t welcome;
 
-    snprintf(hello.client_id, sizeof(hello.client_id), "bomb-client-0.1");
+    snprintf(hello.client_id, sizeof(hello.client_id), CLIENT_ID);
     snprintf(hello.player_name, sizeof(hello.player_name), "%s", player_name);
 
     if (send_hello(state->fd, 255, 255, &hello) < 0)
@@ -77,7 +78,7 @@ int client_handshake(client_state_t *state, const char *player_name)
 }
 
 
-int client_send_leave(client_state_t *state)
+int client_send_leave(const client_state_t *state)
 {
     return send_leave(state->fd, state->my_id, 255);
 }

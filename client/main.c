@@ -6,9 +6,7 @@
 
 #include "client.h"
 #include "draw.h"
-
-#define DEFAULT_IP "127.0.0.1"
-#define DEFAULT_PORT 6969
+#include "configs.h"
 
 int main(int argc, char *argv[])
 {
@@ -74,13 +72,13 @@ int main(int argc, char *argv[])
 
         int ch = getch();
         switch (ch) {
-            case 'x':
-            case 'X':
+            case QUIT_KEY:
+            case QUIT_KEY_UPPER:
                 running = 0;
                 break;
 
-            case 'r':
-            case 'R':
+            case READY_KEY:
+            case READY_KEY_UPPER:
                 if (state.game_status == GAME_LOBBY &&
                     !state.players[state.my_id].ready) {
                     state.players[state.my_id].ready = true;
@@ -88,36 +86,36 @@ int main(int argc, char *argv[])
                 }
                 break;
 
-            case 'w':
-            case 'W':
+            case UP_KEY:
+            case UP_KEY_UPPER:
             case KEY_UP:
                 if (state.game_status == GAME_RUNNING)
                     send_move_attempt(state.fd, state.my_id, DIR_UP);
                 break;
 
-            case 's':
-            case 'S':
+            case DOWN_KEY:
+            case DOWN_KEY_UPPER:
             case KEY_DOWN:
                 if (state.game_status == GAME_RUNNING)
                     send_move_attempt(state.fd, state.my_id, DIR_DOWN);
                 break;
 
-            case 'a':
-            case 'A':
+            case LEFT_KEY:
+            case LEFT_KEY_UPPER:
             case KEY_LEFT:
                 if (state.game_status == GAME_RUNNING)
                     send_move_attempt(state.fd, state.my_id, DIR_LEFT);
                 break;
 
-            case 'd':
-            case 'D':
+            case RIGHT_KEY:
+            case RIGHT_KEY_UPPER:
             case KEY_RIGHT:
                 if (state.game_status == GAME_RUNNING)
                     send_move_attempt(state.fd, state.my_id, DIR_RIGHT);
                 break;
 
-            case 'b':
-            case 'B':
+            case BOMB_KEY:
+            case BOMB_KEY_UPPER:
                 if (state.game_status == GAME_RUNNING)
                     send_bomb_attempt(state.fd, state.my_id, state.players[state.my_id].row, state.players[state.my_id].col, state.map.cols);
                 break;

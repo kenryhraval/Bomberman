@@ -3,7 +3,7 @@
 
 #include <arpa/inet.h>
 
-void broadcast_block_destroyed(server_state_t *state, uint16_t cell)
+void broadcast_block_destroyed(const server_state_t *state, uint16_t cell)
 {
     msg_generic_t header = {
         .msg_type = MSG_BLOCK_DESTROYED,
@@ -25,7 +25,7 @@ void broadcast_block_destroyed(server_state_t *state, uint16_t cell)
 }
 
 
-void broadcast_explosion_start(server_state_t *state, uint16_t row, uint16_t col, uint8_t radius)
+void broadcast_explosion_start(const server_state_t *state, uint16_t row, uint16_t col, uint8_t radius)
 {
     msg_generic_t header = {
         .msg_type = MSG_EXPLOSION_START,
@@ -46,7 +46,7 @@ void broadcast_explosion_start(server_state_t *state, uint16_t row, uint16_t col
 }
 
 
-void broadcast_explosion_end(server_state_t *state, uint16_t row, uint16_t col, uint8_t radius)
+void broadcast_explosion_end(const server_state_t *state, uint16_t row, uint16_t col, uint8_t radius)
 {
     msg_generic_t header = {
         .msg_type = MSG_EXPLOSION_END,
@@ -67,7 +67,7 @@ void broadcast_explosion_end(server_state_t *state, uint16_t row, uint16_t col, 
 }
 
 
-void broadcast_winner(server_state_t *state, uint8_t winner_id)
+void broadcast_winner(const server_state_t *state, uint8_t winner_id)
 {
     msg_generic_t header = {
         .msg_type = MSG_WINNER,
@@ -88,7 +88,7 @@ void broadcast_winner(server_state_t *state, uint8_t winner_id)
 }
 
 
-void broadcast_death(server_state_t *state, uint8_t player_id)
+void broadcast_death(const server_state_t *state, uint8_t player_id)
 {
     msg_generic_t header = {
         .msg_type = MSG_DEATH,
@@ -109,7 +109,7 @@ void broadcast_death(server_state_t *state, uint8_t player_id)
 }
 
 
-void broadcast_bonus_collected(server_state_t *state, uint8_t player_id, uint16_t cell)
+void broadcast_bonus_collected(const server_state_t *state, uint8_t player_id, uint16_t cell)
 {
     msg_generic_t header = {
         .msg_type = MSG_BONUS_RETRIEVED,
@@ -131,7 +131,7 @@ void broadcast_bonus_collected(server_state_t *state, uint8_t player_id, uint16_
 }
 
 
-void broadcast_bonus_available(server_state_t *state, bonus_type_t bonus_type, uint16_t cell)
+void broadcast_bonus_available(const server_state_t *state, bonus_type_t bonus_type, uint16_t cell)
 {
     msg_generic_t header = {
         .msg_type = MSG_BONUS_AVAILABLE,
@@ -153,7 +153,7 @@ void broadcast_bonus_available(server_state_t *state, bonus_type_t bonus_type, u
 }
 
 
-void broadcast_bomb(server_state_t *state, uint8_t player_id, uint16_t cell)
+void broadcast_bomb(const server_state_t *state, uint8_t player_id, uint16_t cell)
 {
     msg_generic_t header = {MSG_BOMB, player_id, BROADCAST};
     msg_bomb_t payload = {
@@ -169,7 +169,7 @@ void broadcast_bomb(server_state_t *state, uint8_t player_id, uint16_t cell)
 }
 
 
-void broadcast_statistics(server_state_t *state)
+void broadcast_statistics(const server_state_t *state)
 {
     msg_generic_t header = {
         .msg_type = MSG_STATISTICS,
@@ -199,7 +199,7 @@ void broadcast_statistics(server_state_t *state)
 }
 
 
-void broadcast_hello(server_state_t *state, int sender_idx, const msg_hello_t *hello)
+void broadcast_hello(const server_state_t *state, int sender_idx, const msg_hello_t *hello)
 {
     for (int i = 0; i < MAX_PLAYERS; i++)
     {
@@ -212,7 +212,7 @@ void broadcast_hello(server_state_t *state, int sender_idx, const msg_hello_t *h
     }
 }
 
-void broadcast_set_ready(server_state_t *state, int sender_idx)
+void broadcast_set_ready(const server_state_t *state, int sender_idx)
 {
     msg_generic_t header = {
         .msg_type = MSG_SET_READY,
@@ -230,7 +230,7 @@ void broadcast_set_ready(server_state_t *state, int sender_idx)
     }
 }
 
-void broadcast_leave(server_state_t *state, int sender_idx)
+void broadcast_leave(const server_state_t *state, int sender_idx)
 {
     msg_generic_t header = {
         .msg_type = MSG_LEAVE,
@@ -246,7 +246,7 @@ void broadcast_leave(server_state_t *state, int sender_idx)
     }
 }
 
-void broadcast_set_game_status(server_state_t *state, game_status_t status)
+void broadcast_set_game_status(const server_state_t *state, game_status_t status)
 {
     msg_set_status_t payload = {
         .game_status = status,
@@ -268,7 +268,7 @@ void broadcast_set_game_status(server_state_t *state, game_status_t status)
     }
 }
 
-void broadcast_map(server_state_t *state)
+void broadcast_map(const server_state_t *state)
 {
     msg_map_t map_msg = {
         .height = state->map.rows,
@@ -284,7 +284,7 @@ void broadcast_map(server_state_t *state)
     }
 }
 
-void broadcast_moved(server_state_t *state, uint8_t player_id, uint16_t cell)
+void broadcast_moved(const server_state_t *state, uint8_t player_id, uint16_t cell)
 {
     msg_moved_t moved_msg = {
         .player_id = player_id,

@@ -18,11 +18,9 @@ typedef struct {
     statistics_t stats;
 } client_state_t;
 
-#define EXPLOSION_CELL 'X'
-
 int client_connect(client_state_t *state, const char *ip, int port);
 int client_handshake(client_state_t *state, const char *player_name);
-int client_send_leave(client_state_t *state);
+int client_send_leave(const client_state_t *state);
 void client_close(client_state_t *state);
 int client_poll_network(client_state_t *state);
 

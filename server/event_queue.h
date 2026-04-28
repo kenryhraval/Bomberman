@@ -29,7 +29,7 @@ typedef struct
     pthread_mutex_t mutex;
 } event_queue_t;
 
-int enqueue_event(event_queue_t *queue, event_t *event);
+int enqueue_event(event_queue_t *queue, const event_t *event);
 int dequeue_event(event_queue_t *queue, event_t *event);
 void init_event_queue(event_queue_t *queue);
 void cleanup_event_queue(event_queue_t *queue);

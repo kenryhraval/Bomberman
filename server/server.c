@@ -213,7 +213,7 @@ void main_cleanup(server_state_t *state)
 }
 
 
-int find_free_slot(client_t clients[])
+int find_free_slot(const client_t clients[])
 {
     for (int i = 0; i < MAX_PLAYERS; i++)
     {
@@ -226,7 +226,7 @@ int find_free_slot(client_t clients[])
 }
 
 
-int add_client(server_state_t *state, int fd, struct sockaddr_in *client_addr)
+int add_client(server_state_t *state, int fd, const struct sockaddr_in *client_addr)
 {
     msg_generic_t header;
     msg_hello_t hello;

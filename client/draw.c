@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "draw.h"
+#include "configs.h"
 
 void draw_init_colors(void)
 {

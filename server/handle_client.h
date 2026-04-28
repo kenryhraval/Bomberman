@@ -17,9 +17,9 @@ typedef struct
 } watchdog_param_t;
 
 void *client_loop(void *args);
-void sync_board_to_client(server_state_t *state, int idx);
+void sync_board_to_client(const server_state_t *state, int idx);
 
-bool all_players_ready(server_state_t *state);
+bool all_players_ready(const server_state_t *state);
 void start_game(server_state_t *state);
 
 void watchdog_handler(union sigval sv);

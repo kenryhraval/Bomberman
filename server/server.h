@@ -65,13 +65,13 @@ void main_cleanup(server_state_t *state);
 void close_all_client_fds(server_state_t *state);
 void signal_handler(int signum);
 
-void broadcast_leave(server_state_t *state, int sender_idx);
-void broadcast_hello(server_state_t *state, int sender_idx, const msg_hello_t *hello);
-void broadcast_set_ready(server_state_t *state, int sender_idx);
+void broadcast_leave(const server_state_t *state, int sender_idx);
+void broadcast_hello(const server_state_t *state, int sender_idx, const msg_hello_t *hello);
+void broadcast_set_ready(const server_state_t *state, int sender_idx);
 void remove_client_quietly(server_state_t *state, int id);
-void broadcast_statistics(server_state_t *state);
+void broadcast_statistics(const server_state_t *state);
 
-int find_free_slot(client_t clients[]);
-int add_client(server_state_t *state, int fd, struct sockaddr_in *client_addr);
+int find_free_slot(const client_t clients[]);
+int add_client(server_state_t *state, int fd, const struct sockaddr_in *client_addr);
 void remove_client(server_state_t *state, int id);
 int player_name_in_use(const server_state_t *state, const char *name);
