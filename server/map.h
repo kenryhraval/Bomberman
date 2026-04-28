@@ -34,4 +34,4 @@ typedef struct {
 
 int load_map(const char *filename, server_state_t *server_state);
 size_t scan_map_choices(const char *maps_dir, server_map_choice_t choices[], size_t max_choices);
-int find_available_map_choices_and_send(server_state_t *state, int fd, uint8_t target_id);
+int send_available_map_choices(server_state_t *state, int fd, uint8_t target_id);

@@ -333,7 +333,8 @@ int client_poll_network(client_state_t *state)
                 state->selected_map_id = state->map_choices[0].id;
             
         } else {
-            return -1; // nezināms ziņas tips
+            
+            printf("Unhandled msg %u from server\n", header.msg_type);
         }
     }
 
