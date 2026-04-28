@@ -34,8 +34,7 @@ typedef struct PACKED {
     uint16_t explosion_duration_ticks;
     uint8_t explosion_radius;
     uint16_t bomb_timer_ticks;
-} msg_map_choice_entry_t;
-
+} client_map_choice_t;
 
 // cell types for the map
 typedef enum {

@@ -18,6 +18,15 @@ int main(int argc, char *argv[])
     
     client_state_t state = {0};
 
+    // initialize map choices in state to avoid drawing 
+    // garbage data before we receive map choices from server
+    state.map_choice_count = 0;
+    state.selected_map_id = 0;
+    memset(state.map_choices, 0, sizeof(state.map_choices));
+
+    // noklusējuma skats ir spēles priekšnama spēlētāju saraksts
+    state.view = VIEW_LOBBY;
+
     if (argc >= 2) ip = argv[1]; 
     if (argc >= 3) port = atoi(argv[2]);
 
@@ -60,7 +69,10 @@ int main(int argc, char *argv[])
 
         switch (state.game_status) {
             case GAME_LOBBY:
-                draw_lobby(&state);
+                if (state.view == VIEW_MAP_SELECT)
+                    draw_map_select(&state);
+                else
+                    draw_lobby(&state);
                 break;
 
             case GAME_RUNNING:
@@ -121,6 +133,52 @@ int main(int argc, char *argv[])
                 if (state.game_status == GAME_RUNNING)
                     send_bomb_attempt(state.fd, state.my_id, state.players[state.my_id].row, state.players[state.my_id].col, state.map.cols);
                 break;
+
+            case 'm':
+            case 'M':
+                if (state.game_status == GAME_LOBBY &&
+                    state.map_choice_count > 0 &&
+                    !state.players[state.my_id].ready) {
+                    state.view = VIEW_MAP_SELECT;
+                }
+                break;
+        }
+
+        if (state.game_status == GAME_LOBBY && state.view == VIEW_MAP_SELECT) {
+            switch (ch) {
+                case 27: // Esc
+                    state.view = VIEW_LOBBY;
+                    break;
+
+                case KEY_UP:
+                    if (state.map_choice_count > 0) {
+                        if (state.selected_map_id == 0)
+                            state.selected_map_id = state.map_choice_count - 1;
+                        else
+                            state.selected_map_id--;
+                    }
+                    break;
+
+                case KEY_DOWN:
+                    if (state.map_choice_count > 0)
+                        state.selected_map_id = (state.selected_map_id + 1) % state.map_choice_count;
+                    break;
+
+                case '\n':
+                case KEY_ENTER:
+                    if (state.map_choice_count > 0) {
+                        send_map_selected(state.fd, state.my_id, SERVER, state.selected_map_id);
+                        state.view = VIEW_LOBBY;
+                    }
+                    break;
+
+                case 'x':
+                case 'X':
+                    running = 0;
+                    break;
+            }
+
+            continue;
         }
     }
 

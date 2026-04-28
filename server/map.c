@@ -106,7 +106,7 @@ static void copy_map_name(char *dst, size_t dst_size, const char *filename)
         *dot = '\0';
 }
 
-static int parse_map_metadata(const char *path, map_choice_t *choice)
+static int parse_map_metadata(const char *path, server_map_choice_t *choice)
 {
     FILE *fp = fopen(path, "r");
     if (fp == NULL)
@@ -163,7 +163,7 @@ static int parse_map_metadata(const char *path, map_choice_t *choice)
     return 0;
 }
 
-size_t scan_map_choices(const char *maps_dir, map_choice_t choices[], size_t max_choices)
+size_t scan_map_choices(const char *maps_dir, server_map_choice_t choices[], size_t max_choices)
 {
     DIR *dir = opendir(maps_dir);
     if (dir == NULL) {
@@ -181,7 +181,7 @@ size_t scan_map_choices(const char *maps_dir, map_choice_t choices[], size_t max
         if (!has_txt_suffix(entry->d_name))
             continue;
 
-        map_choice_t choice = {0};
+        server_map_choice_t choice = {0};
 
         int written = snprintf(choice.path, sizeof(choice.path), "%s/%s", maps_dir, entry->d_name);
 
@@ -216,8 +216,8 @@ int find_available_map_choices_and_send(server_state_t *state, int fd, uint8_t t
 
     for (size_t i = 0; i < state->map_choice_count; i++)
     {
-        map_choice_t *src = &state->map_choices[i];
-        msg_map_choice_entry_t *dst = &choices_msg.entries[i];
+        server_map_choice_t *src = &state->map_choices[i];
+        client_map_choice_t *dst = &choices_msg.entries[i];
 
         dst->id = (uint8_t)i;
         snprintf(dst->name, sizeof(dst->name), "%s", src->name);

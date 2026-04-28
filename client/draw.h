@@ -26,3 +26,4 @@ void draw_init_colors(void);
 void draw_lobby(const client_state_t *state);
 void draw_running(const client_state_t *state);
 void draw_end(const client_state_t *state);
+void draw_map_select(const client_state_t *state);

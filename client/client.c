@@ -291,7 +291,33 @@ int client_poll_network(client_state_t *state)
             if (read_exact(state->fd, &payload, sizeof(payload)) < 0)
                 return -1;
 
-            // TODO: store/display choices later
+            state->map_choice_count = payload.count;
+
+            if (state->map_choice_count > MAX_MAP_CHOICES)
+                state->map_choice_count = MAX_MAP_CHOICES;
+
+            for (uint8_t i = 0; i < state->map_choice_count; i++) {
+                state->map_choices[i].id = payload.entries[i].id;
+
+                memcpy(state->map_choices[i].name, payload.entries[i].name, MAX_MAP_NAME_LEN);
+
+                state->map_choices[i].name[MAX_MAP_NAME_LEN - 1] = '\0';
+
+                state->map_choices[i].rows = payload.entries[i].rows;
+                state->map_choices[i].cols = payload.entries[i].cols;
+                state->map_choices[i].supported_players = payload.entries[i].supported_players;
+
+                state->map_choices[i].player_speed = ntohs(payload.entries[i].player_speed);
+
+                state->map_choices[i].explosion_duration_ticks = ntohs(payload.entries[i].explosion_duration_ticks);
+
+                state->map_choices[i].explosion_radius = payload.entries[i].explosion_radius;
+
+                state->map_choices[i].bomb_timer_ticks = ntohs(payload.entries[i].bomb_timer_ticks);
+            }
+
+            if (state->map_choice_count > 0)
+                state->selected_map_id = state->map_choices[0].id;
             
         } else {
             return -1; // nezināms ziņas tips

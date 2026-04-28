@@ -5,6 +5,13 @@
 #include "shared/protocol.h"
 #include "client_protocol.h"
 
+// skatu pārslēgšanai
+typedef enum {
+    VIEW_LOBBY = 0,
+    VIEW_MAP_SELECT = 1
+} client_view_t;
+
+
 typedef struct {
     int fd;
     uint8_t my_id;
@@ -16,6 +23,10 @@ typedef struct {
     map_t overlay_map;
     uint8_t winner_id;
     statistics_t stats;
+    client_map_choice_t map_choices[MAX_MAP_CHOICES];
+    uint8_t map_choice_count;
+    uint8_t selected_map_id;
+    client_view_t view;
 } client_state_t;
 
 #define EXPLOSION_CELL 'X'

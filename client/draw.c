@@ -156,7 +156,12 @@ void draw_lobby(const client_state_t *state)
         mvprintw(row++, start_x, "Jūs esat gatavs. Gaida pārējos spēlētājus...");
     }
 
-    mvprintw(row + 1, start_x, "Spied X, lai pamestu spēli");
+    if (state->map_choice_count > 0 && !me.ready) {
+        mvprintw(row + 1, start_x, "Spied M, lai izvēlētos karti");
+        mvprintw(row + 2, start_x, "Spied X, lai pamestu spēli");
+    } else {
+        mvprintw(row + 1, start_x, "Spied X, lai pamestu spēli");
+    }
 
     refresh();
 }
@@ -294,3 +299,66 @@ void draw_end(const client_state_t *state)
 
     refresh();
 }
+
+
+void draw_map_select(const client_state_t *state)
+{
+    erase();
+
+    int rows, cols;
+    getmaxyx(stdscr, rows, cols);
+    (void)rows;
+
+    const char *title = "BOMBERMAN";
+    const char *subtitle = "Kartes izvēle";
+
+    attron(A_BOLD);
+    mvprintw(1, (cols - (int)strlen(title)) / 2, "%s", title);
+    attroff(A_BOLD);
+
+    mvprintw(3, (cols - (int)strlen(subtitle)) / 2, "%s", subtitle);
+
+    int box_w = 76;
+    int start_x = (cols - box_w) / 2;
+    int start_y = 5;
+
+    mvprintw(start_y,     start_x, "+--------------------------------------------------------------------------+");
+    mvprintw(start_y + 1, start_x, "| ID | Karte                    | Izmērs | Spēl. | Ātr. | Spr. | Rād. | T |");
+    mvprintw(start_y + 2, start_x, "+----+--------------------------+--------+-------+------+------+------+---+");
+
+    int row = start_y + 3;
+
+    for (uint8_t i = 0; i < state->map_choice_count; i++) {
+        const client_map_choice_t *choice = &state->map_choices[i];
+
+        if (choice->id == state->selected_map_id)
+            attron(A_REVERSE);
+
+        mvprintw(row, start_x,
+                 "| %-2u | %-24.24s | %3ux%-3u | %-5u | %-4u | %-4u | %-4u | %-1u |",
+                 choice->id,
+                 choice->name,
+                 choice->rows,
+                 choice->cols,
+                 choice->supported_players,
+                 choice->player_speed,
+                 choice->explosion_duration_ticks,
+                 choice->explosion_radius,
+                 choice->bomb_timer_ticks);
+
+        if (choice->id == state->selected_map_id)
+            attroff(A_REVERSE);
+
+        row++;
+    }
+
+    mvprintw(row++, start_x, "+----+--------------------------+--------+-------+------+------+------+---+");
+
+    row += 2;
+    mvprintw(row++, start_x, "↑/↓: izvēlēties karti");
+    mvprintw(row++, start_x, "Enter: apstiprināt karti");
+    mvprintw(row++, start_x, "Esc: atpakaļ uz priekšnamu");
+
+    refresh();
+}
+
