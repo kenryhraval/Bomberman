@@ -316,32 +316,126 @@ void broadcast_moved(server_state_t *state, uint8_t player_id, uint16_t cell)
     }
 }
 
-// void broadcast_sync_board(server_state_t *state)
-// {
-//     for (int i = 0; i < MAX_PLAYERS; i++)
-//     {
-//         if (!state->clients[i].connected)
-//             continue;
+// Send the full running-game state to a single client, using only
+// existing protocol messages. Used after a mid-game reconnect so the
+// returning client rebuilds map, players, bombs, explosions, and bonuses.
+void sync_board_to_client(server_state_t *state, int idx)
+{
+    int fd = state->clients[idx].fd;
 
-//         player_t *p = &state->clients[i].player;
+    // 1. current map (soft blocks destroyed, bonuses/bombs imprinted)
+    msg_map_t map_msg = {
+        .height = state->map.rows,
+        .width = state->map.cols,
+    };
+    if (send_map(fd, SERVER, idx, &map_msg, state->map.cells) < 0)
+        return;
 
-//         msg_generic_t header = {
-//             .msg_type = MSG_SYNC_BOARD,
-//             .sender_id = p->id,
-//             .target_id = BROADCAST};
+    // 2. position of every connected player (alive or dead body)
+    for (int i = 0; i < MAX_PLAYERS; i++)
+    {
+        if (!state->clients[i].connected)
+            continue;
 
-//         // sūta katram klientam info par šo spēlētāju
-//         for (int j = 0; j < MAX_PLAYERS; j++)
-//         {
-//             if (!state->clients[j].connected)
-//                 continue;
+        player_t *p = &state->clients[i].player;
+        msg_moved_t moved = {
+            .player_id = p->id,
+            .cell = htons(make_cell_index(p->row, p->col, state->map.cols)),
+        };
+        if (send_moved(fd, SERVER, idx, &moved) < 0)
+            return;
+    }
 
-//             int fd = state->clients[j].fd;
-//             write_exact(fd, &header, sizeof(header));
-//             write_exact(fd, p, sizeof(player_t));
-//         }
-//     }
-// }
+    // 3. death state for already-dead players
+    for (int i = 0; i < MAX_PLAYERS; i++)
+    {
+        if (!state->clients[i].connected)
+            continue;
+        if (state->clients[i].player.alive)
+            continue;
+
+        msg_generic_t header = {
+            .msg_type = MSG_DEATH,
+            .sender_id = state->clients[i].player.id,
+            .target_id = idx,
+        };
+        msg_death_t payload = {
+            .player_id = state->clients[i].player.id,
+        };
+        if (write_exact(fd, &header, sizeof(header)) < 0)
+            return;
+        if (write_exact(fd, &payload, sizeof(payload)) < 0)
+            return;
+    }
+
+    // 4. active bombs
+    for (int i = 0; i < MAX_BOMBS; i++)
+    {
+        if (!state->bombs[i].active)
+            continue;
+
+        msg_generic_t header = {
+            .msg_type = MSG_BOMB,
+            .sender_id = state->bombs[i].owner_id,
+            .target_id = idx,
+        };
+        msg_bomb_t payload = {
+            .player_id = state->bombs[i].owner_id,
+            .cell = htons(make_cell_index(state->bombs[i].row,
+                                          state->bombs[i].col,
+                                          state->map.cols)),
+        };
+        if (write_exact(fd, &header, sizeof(header)) < 0)
+            return;
+        if (write_exact(fd, &payload, sizeof(payload)) < 0)
+            return;
+    }
+
+    // 5. active explosions (still burning)
+    for (int i = 0; i < MAX_BOMBS; i++)
+    {
+        if (!state->explosions[i].source.active)
+            continue;
+
+        bomb_t *src = &state->explosions[i].source;
+        msg_generic_t header = {
+            .msg_type = MSG_EXPLOSION_START,
+            .sender_id = SERVER,
+            .target_id = idx,
+        };
+        msg_explosion_start_t payload = {
+            .radius = src->radius,
+            .cell = htons(make_cell_index(src->row, src->col, state->map.cols)),
+        };
+        if (write_exact(fd, &header, sizeof(header)) < 0)
+            return;
+        if (write_exact(fd, &payload, sizeof(payload)) < 0)
+            return;
+    }
+
+    // 6. bonuses lying on the map
+    for (size_t i = 0; i < state->bonus_count; i++)
+    {
+        if (!state->bonuses[i].active)
+            continue;
+
+        msg_generic_t header = {
+            .msg_type = MSG_BONUS_AVAILABLE,
+            .sender_id = SERVER,
+            .target_id = idx,
+        };
+        msg_bonus_available_t payload = {
+            .bonus_type = state->bonuses[i].type,
+            .cell = htons(make_cell_index(state->bonuses[i].row,
+                                          state->bonuses[i].col,
+                                          state->map.cols)),
+        };
+        if (write_exact(fd, &header, sizeof(header)) < 0)
+            return;
+        if (write_exact(fd, &payload, sizeof(payload)) < 0)
+            return;
+    }
+}
 
 bool all_players_ready(server_state_t *state)
 {

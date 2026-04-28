@@ -418,6 +418,10 @@ int add_client(server_state_t *state, int fd, struct sockaddr_in *client_addr)
         printf("Player %s (id=%d) is reconnecting, setting ready state to true\n", p->name, p->id);
         p->ready = true;
         broadcast_set_ready(state, free_idx);
+
+        // resend the running-game state so the returning client rebuilds
+        // map, players, bombs, explosions, and bonuses
+        sync_board_to_client(state, free_idx);
     }
 
     return free_idx;
