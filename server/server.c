@@ -350,6 +350,11 @@ int add_client(server_state_t *state, int fd, const struct sockaddr_in *client_a
         return -1;
     }
 
+    // first client is the initiator
+    if (!is_reconnecting && state->initiator_id == 255)
+        state->initiator_id = free_idx;
+
+
     client_t *c = &state->clients[free_idx];
     player_t *p = &state->clients[free_idx].player;
 
