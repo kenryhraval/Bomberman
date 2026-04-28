@@ -42,7 +42,7 @@ int player_name_in_use(const server_state_t *state, const char *name)
 
 bool is_proprietary_client_id(const client_t *client)
 {
-    return strcmp(client->version, CLIENT_ID) >= 0;
+    return strcmp(client->version, CLIENT_ID) == 0;
 }
 
 int serve_main(int argc, char *argv[])
@@ -55,7 +55,7 @@ int serve_main(int argc, char *argv[])
     memset(&server_state, 0, sizeof(server_state));
     server_state.game_status = GAME_LOBBY;
     server_state.server_running = true;
-    server_state.initiator_id = 255;  // no initiator yet
+    server_state.initiator_id = 255; // no initiator yet
 
     // scan maps dir at startup to populate map choices, so we can send the list to the initiator
     server_state.map_choice_count = scan_map_choices(MAPS_DIR, server_state.map_choices, MAX_MAP_CHOICES);
@@ -149,7 +149,6 @@ int serve_main(int argc, char *argv[])
             continue;
         }
 
-
         // check if selected map can support another player before accepting connection
         pthread_mutex_lock(&server_state.mutex);
 
@@ -166,7 +165,6 @@ int serve_main(int argc, char *argv[])
         int free_idx = add_client(&server_state, client_fd, &client_addr);
 
         pthread_mutex_unlock(&server_state.mutex);
-
 
         if (free_idx < 0)
             continue; // rejected
@@ -192,7 +190,6 @@ int serve_main(int argc, char *argv[])
     return 0;
 }
 
-
 void close_all_client_fds(server_state_t *state)
 {
     for (int i = 0; i < MAX_PLAYERS; i++)
@@ -204,7 +201,6 @@ void close_all_client_fds(server_state_t *state)
         }
     }
 }
-
 
 void main_cleanup(server_state_t *state)
 {
@@ -222,7 +218,6 @@ void main_cleanup(server_state_t *state)
     printf("Server shutdown complete.\n");
 }
 
-
 int find_free_slot(const client_t clients[])
 {
     for (int i = 0; i < MAX_PLAYERS; i++)
@@ -234,7 +229,6 @@ int find_free_slot(const client_t clients[])
     }
     return -1;
 }
-
 
 int add_client(server_state_t *state, int fd, const struct sockaddr_in *client_addr)
 {
@@ -358,7 +352,6 @@ int add_client(server_state_t *state, int fd, const struct sockaddr_in *client_a
     if (!is_reconnecting && state->initiator_id == 255)
         state->initiator_id = free_idx;
 
-
     client_t *c = &state->clients[free_idx];
     player_t *p = &state->clients[free_idx].player;
 
@@ -383,7 +376,7 @@ int add_client(server_state_t *state, int fd, const struct sockaddr_in *client_a
         p->ready = false;
         p->last_move_tick = 0;
         p->alive = true;
-        
+
         strncpy(p->name, hello_player_name, MAX_NAME_LEN);
         p->name[MAX_NAME_LEN] = '\0';
     }
@@ -422,13 +415,13 @@ int add_client(server_state_t *state, int fd, const struct sockaddr_in *client_a
     // and the client's version supports it
     if (free_idx == state->initiator_id && is_proprietary_client_id(c))
     {
-        if (send_available_map_choices(state, fd, free_idx) < 0) {
+        if (send_available_map_choices(state, fd, free_idx) < 0)
+        {
             printf("Failed to send map choices to initiator\n");
             remove_client_quietly(state, free_idx);
             return -1;
         }
     }
-
 
     // 4. inform all other clients about the new player
     // just retranslate HELLo message to all clients
@@ -436,8 +429,8 @@ int add_client(server_state_t *state, int fd, const struct sockaddr_in *client_a
 
     printf("Broadcasted HELLO of player %s (id=%d) to other clients\n", p->name, p->id);
 
-    // Serveris ir tiesīgs nosūtīt šo ziņu arī tad, ja attiecīgais klients nav tādu nosūtījis, 
-    // tādējādi “piespiedu kārtā” padarot to par spēlētāju. 
+    // Serveris ir tiesīgs nosūtīt šo ziņu arī tad, ja attiecīgais klients nav tādu nosūtījis,
+    // tādējādi “piespiedu kārtā” padarot to par spēlētāju.
     // Tā var īstenot, piemēram, iespēju pieslēgties pēc savienojuma pazušanas spēles laikā.
     if (is_reconnecting)
     {
@@ -475,7 +468,8 @@ void reassign_initiator(server_state_t *state)
     state->initiator_id = new_initiator;
     printf("Initiator reassigned to client %d\n", new_initiator);
 
-    if (state->game_status == GAME_LOBBY)
+    if (state->game_status == GAME_LOBBY &&
+        is_proprietary_client_id(&state->clients[new_initiator]))
     {
         int fd = state->clients[new_initiator].fd;
         if (send_available_map_choices(state, fd, new_initiator) < 0)
@@ -508,4 +502,3 @@ void remove_client(server_state_t *state, int id)
 
     remove_client_quietly(state, id);
 }
-

@@ -116,7 +116,7 @@ void game_tick(void *arg)
         }
     }
 
-    if (all_players_have_proprietary_client)
+    if (!all_players_have_proprietary_client)
         return;
 
     // check if draw timer hit timeout
