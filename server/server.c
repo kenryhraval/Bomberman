@@ -40,8 +40,12 @@ int player_name_in_use(const server_state_t *state, const char *name)
     return 0;
 }
 
+bool is_proprietary_client_id(const client_t *client)
+{
+    return strcmp(client->version, CLIENT_ID) >= 0;
+}
 
-int serve_main()
+int serve_main(int argc, char *argv[])
 {
     int server_fd, client_fd;
     struct sockaddr_in remote_address;
@@ -416,7 +420,7 @@ int add_client(server_state_t *state, int fd, const struct sockaddr_in *client_a
 
     // send map configureation choices if this client is the initiator
     // and the client's version supports it
-    if (free_idx == state->initiator_id && strcmp(c->version, CLIENT_ID) >= 0)
+    if (free_idx == state->initiator_id && is_proprietary_client_id(c))
     {
         if (send_available_map_choices(state, fd, free_idx) < 0) {
             printf("Failed to send map choices to initiator\n");
@@ -504,3 +508,4 @@ void remove_client(server_state_t *state, int id)
 
     remove_client_quietly(state, id);
 }
+

@@ -96,6 +96,10 @@ typedef struct PACKED {
 } msg_statistics_t;
 
 typedef struct PACKED {
+    uint32_t current_tick;
+} msg_timer_sync_t;
+
+typedef struct PACKED {
     uint8_t count;
     client_map_choice_t entries[MAX_MAP_CHOICES];
 } msg_map_choices_t;

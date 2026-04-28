@@ -24,7 +24,6 @@ void broadcast_block_destroyed(const server_state_t *state, uint16_t cell)
     }
 }
 
-
 void broadcast_explosion_start(const server_state_t *state, uint16_t row, uint16_t col, uint8_t radius)
 {
     msg_generic_t header = {
@@ -44,7 +43,6 @@ void broadcast_explosion_start(const server_state_t *state, uint16_t row, uint16
         write_exact(state->clients[i].fd, &payload, sizeof(payload));
     }
 }
-
 
 void broadcast_explosion_end(const server_state_t *state, uint16_t row, uint16_t col, uint8_t radius)
 {
@@ -66,7 +64,6 @@ void broadcast_explosion_end(const server_state_t *state, uint16_t row, uint16_t
     }
 }
 
-
 void broadcast_winner(const server_state_t *state, uint8_t winner_id)
 {
     msg_generic_t header = {
@@ -87,7 +84,6 @@ void broadcast_winner(const server_state_t *state, uint8_t winner_id)
     }
 }
 
-
 void broadcast_death(const server_state_t *state, uint8_t player_id)
 {
     msg_generic_t header = {
@@ -107,7 +103,6 @@ void broadcast_death(const server_state_t *state, uint8_t player_id)
         write_exact(state->clients[i].fd, &payload, sizeof(payload));
     }
 }
-
 
 void broadcast_bonus_collected(const server_state_t *state, uint8_t player_id, uint16_t cell)
 {
@@ -130,7 +125,6 @@ void broadcast_bonus_collected(const server_state_t *state, uint8_t player_id, u
     }
 }
 
-
 void broadcast_bonus_available(const server_state_t *state, bonus_type_t bonus_type, uint16_t cell)
 {
     msg_generic_t header = {
@@ -152,7 +146,6 @@ void broadcast_bonus_available(const server_state_t *state, bonus_type_t bonus_t
     }
 }
 
-
 void broadcast_bomb(const server_state_t *state, uint8_t player_id, uint16_t cell)
 {
     msg_generic_t header = {MSG_BOMB, player_id, BROADCAST};
@@ -168,6 +161,27 @@ void broadcast_bomb(const server_state_t *state, uint8_t player_id, uint16_t cel
     }
 }
 
+void broadcast_timer_sync(const server_state_t *state)
+{
+    msg_generic_t header = {
+        .msg_type = MSG_TIMER_SYNC,
+        .sender_id = SERVER,
+        .target_id = BROADCAST,
+    };
+
+    // payload contain current tick count so clients can sync their timers
+    msg_timer_sync_t payload = {
+        .current_tick = htonl(state->current_tick),
+    };
+
+    for (int i = 0; i < MAX_PLAYERS; i++)
+    {
+        if (!state->clients[i].connected)
+            continue;
+        write_exact(state->clients[i].fd, &header, sizeof(header));
+        write_exact(state->clients[i].fd, &payload, sizeof(payload));
+    }
+}
 
 void broadcast_statistics(const server_state_t *state)
 {
@@ -175,10 +189,14 @@ void broadcast_statistics(const server_state_t *state)
         .msg_type = MSG_STATISTICS,
         .sender_id = SERVER,
         .target_id = BROADCAST};
-        
+
     for (int i = 0; i < MAX_PLAYERS; i++)
     {
         if (!state->clients[i].connected)
+            continue;
+
+        // send only proprietary clients their stats
+        if (!is_proprietary_client_id(&state->clients[i]))
             continue;
 
         if (write_exact(state->clients[i].fd, &header, sizeof(header)) < 0)
@@ -189,15 +207,12 @@ void broadcast_statistics(const server_state_t *state)
             .stats = {
                 .kills = state->stats[i].kills,
                 .blocks_destroyed = htons(state->stats[i].blocks_destroyed),
-                .bonuses_collected = htons(state->stats[i].bonuses_collected)
-            }
-        };
+                .bonuses_collected = htons(state->stats[i].bonuses_collected)}};
 
         if (write_exact(state->clients[i].fd, &payload, sizeof(payload)) < 0)
             continue;
     }
 }
-
 
 void broadcast_hello(const server_state_t *state, int sender_idx, const msg_hello_t *hello)
 {

@@ -51,7 +51,7 @@ typedef struct server_state {
     config_t config;
     event_queue_t queue;
     pthread_mutex_t mutex;
-    uint64_t current_tick;
+    uint32_t current_tick;
     statistics_t stats[MAX_PLAYERS];
     server_map_choice_t map_choices[MAX_MAP_CHOICES];
     uint8_t map_choice_count; // number of available map choices in map_choices array
@@ -77,3 +77,4 @@ int add_client(server_state_t *state, int fd, const struct sockaddr_in *client_a
 void remove_client(server_state_t *state, int id);
 int player_name_in_use(const server_state_t *state, const char *name);
 void reassign_initiator(server_state_t *state);
+bool is_proprietary_client_id(const client_t *client);

@@ -12,6 +12,8 @@
 #define MAX_BOMB_RADIUS 10
 #define MAX_BOMB_EXPLOSION_DURATION_TICKS 100
 
+#define GAME_DRAW_TICK_TIMEOUT (5 * 60 * TICK_RATE)
+
 /* Server Configurations */
 #define CLIENT_TIMEOUT_SECONDS 30
 

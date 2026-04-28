@@ -18,3 +18,5 @@ void broadcast_hello(const server_state_t *state, int sender_idx, const msg_hell
 void broadcast_set_game_status(const server_state_t *state, game_status_t status);
 void broadcast_moved(const server_state_t *state, uint8_t player_id, uint16_t cell);
 void broadcast_map(const server_state_t *state);
+void broadcast_timer_sync(const server_state_t *state);
+void broadcast_statistics(const server_state_t *state);

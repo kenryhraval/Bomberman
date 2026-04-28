@@ -92,17 +92,57 @@ void game_tick(void *arg)
 
         if (state->explosions[i].duration_ticks == 0)
         {
-            bomb_t* source = &state->explosions[i].source;
+            bomb_t *source = &state->explosions[i].source;
             state->explosions[i].active = false;
             broadcast_explosion_end(state, source->row, source->col, source->radius);
-            
+
             free(state->explosions[i].footprint);
             state->explosions[i].footprint = NULL;
             state->explosions[i].footprint_size = 0;
         }
     }
-}
 
+    // check if one player has no proprietae client
+    bool all_players_have_proprietary_client = true;
+    for (int i = 0; i < MAX_PLAYERS; i++)
+    {
+        if (!state->clients[i].connected)
+            continue;
+
+        if (!is_proprietary_client_id(&state->clients[i]))
+        {
+            all_players_have_proprietary_client = false;
+            break;
+        }
+    }
+
+    if (all_players_have_proprietary_client)
+        return;
+
+    // check if draw timer hit timeout
+    if (state->current_tick >= GAME_DRAW_TICK_TIMEOUT)
+    {
+        state->current_tick = 0;
+        int alive_count = check_win_condition(state);
+        if (alive_count > 1)
+        {
+            broadcast_winner(state, SERVER); // draw
+
+            broadcast_statistics(state);
+            // send game end status
+            broadcast_set_game_status(state, GAME_END);
+            state->game_status = GAME_END;
+        }
+
+        return;
+    }
+
+    // each 100 ticks, send timer sync message to clients to keep their timers accurate
+    if (state->current_tick % 100 == 0)
+    {
+        broadcast_timer_sync(state);
+    }
+}
 
 void maybe_spawn_bonus(server_state_t *state, uint16_t row, uint16_t col)
 {
@@ -146,9 +186,8 @@ void maybe_spawn_bonus(server_state_t *state, uint16_t row, uint16_t col)
     broadcast_bonus_available(state, bonus->type, bonus_cell);
 }
 
-
 void calculate_explosion_footprint(const server_state_t *state, explosion_t *expl)
-{   
+{
     uint16_t center_cell = make_cell_index((uint16_t)expl->source.row, (uint16_t)expl->source.col, state->map.cols);
 
     // explosion footprint always includes the center cell
@@ -160,7 +199,7 @@ void calculate_explosion_footprint(const server_state_t *state, explosion_t *exp
 
     // propagate explosion in 4 directions to calculate footprint
     for (int d = 0; d < 4; d++)
-    {   
+    {
         // propagate explosion in this direction until we reach max radius or hit a block
         for (int r = 1; r <= expl->source.radius; r++)
         {
@@ -174,13 +213,13 @@ void calculate_explosion_footprint(const server_state_t *state, explosion_t *exp
                 break;
 
             uint16_t cell_idx = make_cell_index((uint16_t)row, (uint16_t)col, state->map.cols);
-            
+
             // get cell type
             uint8_t cell = state->map.cells[cell_idx];
 
             if (cell == HARD_BLOCK)
                 break;
-            
+
             expl->footprint[idx++] = cell_idx;
 
             // if we hit a soft block or bomb, explosion stops but it still affects that cell
@@ -191,7 +230,6 @@ void calculate_explosion_footprint(const server_state_t *state, explosion_t *exp
 
     expl->footprint_size = idx;
 }
-
 
 void explode(server_state_t *state, int bomb_idx)
 {
@@ -303,7 +341,6 @@ void explode(server_state_t *state, int bomb_idx)
     check_win_condition(state);
 }
 
-
 void check_player_deaths(server_state_t *state, uint16_t row, uint16_t col, uint8_t killer_id)
 {
     for (int i = 0; i < MAX_PLAYERS; i++)
@@ -329,12 +366,11 @@ void check_player_deaths(server_state_t *state, uint16_t row, uint16_t col, uint
     }
 }
 
-
-void check_win_condition(server_state_t *state)
+int check_win_condition(server_state_t *state)
 {
     // already have a winner or game not running
     if (state->game_status != GAME_RUNNING)
-        return;
+        return -1;
 
     int alive_count = 0;
     uint8_t last_alive_id = 0;
@@ -367,8 +403,9 @@ void check_win_condition(server_state_t *state)
         broadcast_set_game_status(state, GAME_END);
         state->game_status = GAME_END;
     }
-}
 
+    return alive_count;
+}
 
 void handle_bomb(server_state_t *state, const event_t *ev)
 {
@@ -416,7 +453,6 @@ void handle_bomb(server_state_t *state, const event_t *ev)
     // broadcast BOMB to all clients
     broadcast_bomb(state, ev->player_id, ev->data.cell);
 }
-
 
 void handle_move(server_state_t *state, const event_t *ev)
 {
