@@ -280,6 +280,11 @@ int client_poll_network(client_state_t *state)
             state->stats.blocks_destroyed = ntohs(payload.stats.blocks_destroyed);
             state->stats.bonuses_collected = ntohs(payload.stats.bonuses_collected);
         
+        } else if (header.msg_type == MSG_PING) {
+            // server checks if client is still alive
+            if (send_pong(state->fd, state->my_id, SERVER) < 0)
+                return -1;
+                
         } else {
             return -1; // nezināms ziņas tips
         }
