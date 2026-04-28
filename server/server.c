@@ -474,7 +474,7 @@ void reassign_initiator(server_state_t *state)
     if (state->game_status == GAME_LOBBY)
     {
         int fd = state->clients[new_initiator].fd;
-        if (find_available_map_choices_and_send(state, fd, new_initiator) < 0)
+        if (send_available_map_choices(state, fd, new_initiator) < 0)
             printf("Failed to send map choices to new initiator\n");
     }
 }
