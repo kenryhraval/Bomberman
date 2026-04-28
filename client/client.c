@@ -297,7 +297,12 @@ int client_poll_network(client_state_t *state)
             // server checks if client is still alive
             if (send_pong(state->fd, state->my_id, SERVER) < 0)
                 return -1;
-                
+
+        } else if (header.msg_type == MSG_TIMER_SYNC) {
+            msg_timer_sync_t payload;
+            if (read_exact(state->fd, &payload, sizeof(payload)) < 0)
+                return -1;
+
         } else if (header.msg_type == MSG_MAP_CHOICES) {
             msg_map_choices_t payload;
 

@@ -9,6 +9,7 @@
 #include "handle_client.h"
 #include "event_queue.h"
 #include "broadcasts.h"
+#include "map.h"
 
 void watchdog_handler(union sigval sv)
 {
@@ -158,11 +159,23 @@ void *client_loop(void *args)
             // any player pressing ready in GAME_END is treated as a restart request
             if (state->game_status == GAME_END)
             {
-
                 reset_players_state(state);
 
                 state->game_status = GAME_LOBBY;
                 broadcast_set_game_status(state, GAME_LOBBY);
+
+                // resend map choices to the current initiator so they can select
+                // a map for the next round (covers the case where the initiator
+                // changed while the game was running and never received MAP_CHOICES)
+                if (state->initiator_id < MAX_PLAYERS &&
+                    state->clients[state->initiator_id].connected &&
+                    is_proprietary_client_id(&state->clients[state->initiator_id]))
+                {
+                    int initiator_fd = state->clients[state->initiator_id].fd;
+                    if (send_available_map_choices(state, initiator_fd, state->initiator_id) < 0)
+                        printf("Failed to send map choices to initiator after restart\n");
+                }
+
                 break;
             }
 
