@@ -27,6 +27,8 @@ typedef struct {
     uint8_t map_choice_count;
     uint8_t selected_map_id;
     client_view_t view;
+    uint32_t current_tick;
+    uint64_t last_tick_time_ms;
 } client_state_t;
 
 int client_connect(client_state_t *state, const char *ip, int port);

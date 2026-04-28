@@ -3,8 +3,8 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <poll.h>
-#include "configs.h"
 
+#include "configs.h"
 #include "client.h"
 #include "helpers.h"
 
@@ -163,9 +163,20 @@ int client_poll_network(client_state_t *state)
                 memset(&state->map, 0, sizeof(state->map));
                 memset(&state->overlay_map, 0, sizeof(state->overlay_map));
                 state->winner_id = 0;
+                state->last_tick_time_ms = 0;
             }
 
             state->game_status = payload.game_status;
+
+            if (state->game_status == GAME_RUNNING && state->last_tick_time_ms == 0) 
+            {
+                state->current_tick = 0;
+                state->last_tick_time_ms = get_monotonic_time_ms();
+            }
+
+            if (state->game_status != GAME_RUNNING) {
+                state->last_tick_time_ms = 0;
+            }
 
         } else if (header.msg_type == MSG_MAP) {
             msg_map_t payload;
@@ -331,6 +342,14 @@ int client_poll_network(client_state_t *state)
 
             if (state->map_choice_count > 0)
                 state->selected_map_id = state->map_choices[0].id;
+            
+        } else if (header.msg_type == MSG_TIMER_SYNC) {
+            msg_timer_sync_t payload;
+            if (read_exact(state->fd, &payload, sizeof(payload)) < 0)
+                return -1;
+
+            state->current_tick = ntohl(payload.current_tick);
+            state->last_tick_time_ms = get_monotonic_time_ms();
             
         } else {
             

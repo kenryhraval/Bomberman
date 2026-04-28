@@ -40,12 +40,14 @@ int player_name_in_use(const server_state_t *state, const char *name)
     return 0;
 }
 
+
+// check wether the client supports any extra features
 bool is_proprietary_client_id(const client_t *client)
 {
     return strcmp(client->version, CLIENT_ID) == 0;
 }
 
-int serve_main(int argc, char *argv[])
+int serve_main()
 {
     int server_fd, client_fd;
     struct sockaddr_in remote_address;

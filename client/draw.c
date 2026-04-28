@@ -4,6 +4,7 @@
 
 #include "draw.h"
 #include "configs.h"
+#include "helpers.h"
 
 void draw_init_colors(void)
 {
@@ -80,6 +81,16 @@ char fill_for_cell(char cell)
         case BOMB_TIMER_BONUS: return '%';
         default: return ' ';
     }
+}
+
+
+static int clamp_int(int value, int min, int max)
+{
+    if (value < min)
+        return min;
+    if (value > max)
+        return max;
+    return value;
 }
 
 
@@ -172,26 +183,78 @@ void draw_running(const client_state_t *state)
 {
     erase();
 
+    int rows, cols;
+    getmaxyx(stdscr, rows, cols);
+
+    uint32_t tick = client_estimated_tick(state);
+    uint32_t time_left = 0;
+
+    if (tick < GAME_DRAW_TICK_TIMEOUT)
+        time_left = GAME_DRAW_TICK_TIMEOUT - tick;
+
+    char header[64];
+    snprintf(header, sizeof(header), "BOMBERMAN   Laiks: %u", time_left);
+
     attron(A_BOLD);
-    mvprintw(0, 2, "BOMBERMAN");
+    mvprintw(0, (cols - (int)strlen(header)) / 2, "%s", header);
     attroff(A_BOLD);
 
     int start_row = 2;
     int start_col = 2;
 
-    for (int r = -1; r <= state->map.rows; r++) {
-        for (int c = -1; c <= state->map.cols; c++) {
-            if (r >= 0 && r < state->map.rows && c >= 0 && c < state->map.cols)
+    /*
+    * Use almost the whole terminal width for the map.
+    */
+    int available_w = cols - start_col - 4;
+    int available_h = rows - start_row - 4;
+
+    int visible_cols = available_w / TILE_W - 2; // -2 for border
+    int visible_rows = available_h / TILE_H - 2; // -2 for border
+
+    if (visible_cols > state->map.cols)
+        visible_cols = state->map.cols;
+    if (visible_rows > state->map.rows)
+        visible_rows = state->map.rows;
+
+    if (visible_cols < 1)
+        visible_cols = 1;
+    if (visible_rows < 1)
+        visible_rows = 1;
+
+    player_t me = state->players[state->my_id];
+
+    /*
+     * Camera follows the current player.
+     */
+    int first_col = me.col - visible_cols / 2;
+    int first_row = me.row - visible_rows / 2;
+
+    first_col = clamp_int(first_col, 0, state->map.cols - visible_cols);
+    first_row = clamp_int(first_row, 0, state->map.rows - visible_rows);
+
+    int last_col = first_col + visible_cols - 1;
+    int last_row = first_row + visible_rows - 1;
+
+    /*
+     * Draw border around visible part of map.
+     */
+    for (int r = -1; r <= visible_rows; r++) {
+        for (int c = -1; c <= visible_cols; c++) {
+            if (r >= 0 && r < visible_rows && c >= 0 && c < visible_cols)
                 continue;
 
             int y = start_row + (r + 1) * TILE_H;
             int x = start_col + (c + 1) * TILE_W;
+
             draw_tile(y, x, C_BORDER, '#', NULL);
         }
     }
 
-    for (int r = 0; r < state->map.rows; r++) {
-        for (int c = 0; c < state->map.cols; c++) {
+    /*
+     * Draw only visible map cells.
+     */
+    for (int r = first_row; r <= last_row; r++) {
+        for (int c = first_col; c <= last_col; c++) {
             uint16_t idx = make_cell_index(r, c, state->map.cols);
 
             char cell = state->map.cells[idx];
@@ -199,25 +262,36 @@ void draw_running(const client_state_t *state)
                 cell = state->overlay_map.cells[idx];
             }
 
-            // offset by 1 tile for border
-            int y = start_row + (r + 1) * TILE_H;
-            int x = start_col + (c + 1) * TILE_W;
+            int screen_r = r - first_row;
+            int screen_c = c - first_col;
 
-            const char *label = "";
+            int y = start_row + (screen_r + 1) * TILE_H;
+            int x = start_col + (screen_c + 1) * TILE_W;
 
-            draw_tile(y, x, color_for_cell(cell), fill_for_cell(cell), label);
+            draw_tile(y, x, color_for_cell(cell), fill_for_cell(cell), "");
         }
     }
 
+    /*
+     * Draw only players who are inside the visible viewport.
+     */
     for (int i = 0; i < MAX_PLAYERS; i++) {
         if (state->players[i].name[0] == '\0')
             continue;
         if (!state->players[i].alive)
             continue;
 
-        // offset by 1 tile for border
-        int y = start_row + (state->players[i].row + 1) * TILE_H;
-        int x = start_col + (state->players[i].col + 1) * TILE_W;
+        int pr = state->players[i].row;
+        int pc = state->players[i].col;
+
+        if (pr < first_row || pr > last_row || pc < first_col || pc > last_col)
+            continue;
+
+        int screen_r = pr - first_row;
+        int screen_c = pc - first_col;
+
+        int y = start_row + (screen_r + 1) * TILE_H;
+        int x = start_col + (screen_c + 1) * TILE_W;
 
         char label[4];
         snprintf(label, sizeof(label), "%u", state->players[i].id);
@@ -225,31 +299,11 @@ void draw_running(const client_state_t *state)
         draw_tile(y, x, i == state->my_id ? C_ME : C_PLAYER, ' ', label);
     }
 
-    // offset by 2 tile for border
-    int panel_x = start_col + (state->map.cols+2) * TILE_W + 4;
-
-    attron(A_BOLD);
-    mvprintw(2, panel_x, "Spēlētāji");
-    attroff(A_BOLD);
-
-    int row = 4;
-    for (int i = 0; i < MAX_PLAYERS; i++) {
-        if (state->players[i].name[0] == '\0')
-            continue;
-
-        mvprintw(row++, panel_x, "[%u] %s%s",
-                 state->players[i].id,
-                 state->players[i].name,
-                 i == state->my_id ? " (tu)" : "");
-    }
-
-    // offset by 2 tile for border
-    mvprintw(start_row + (state->map.rows+2) * TILE_H + 2, 2,
-             "WASD: kustēties   B: spridzini   X: beigt spēli");
+    const char *hint = "WASD: kustēties   B: spridzini   X: beigt spēli";
+    mvprintw(rows - 2, (cols - (int)strlen(hint)) / 2, "%s", hint);
 
     refresh();
 }
-
 
 void draw_end(const client_state_t *state)
 {
