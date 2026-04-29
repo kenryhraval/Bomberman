@@ -25,7 +25,7 @@ void draw_init_colors(void)
     init_pair(C_ME, COLOR_WHITE, COLOR_MAGENTA);
 
     if (can_change_color()) {
-        // ncurses use color scale from 0 to 1000
+        // ncurses izmanto skalu no 0 līdz 1000
         init_color(COLOR_GRAY, 100, 100, 100);
         init_pair(C_BORDER, COLOR_WHITE, COLOR_GRAY);
     }
@@ -214,9 +214,7 @@ void draw_running(const client_state_t *state)
     int start_row = 3;
     int start_col = 2;
 
-    /*
-    * Use almost the whole terminal width for the map.
-    */
+    // Izmanto gandrīz visu termināļa platumu kartes attēlošanai
     int available_w = cols - start_col - 4;
     int available_h = rows - start_row - 4;
 
@@ -233,9 +231,6 @@ void draw_running(const client_state_t *state)
     if (visible_rows < 1)
         visible_rows = 1;
 
-    /*
-     * Camera follows the current player.
-     */
     int first_col = me.col - visible_cols / 2;
     int first_row = me.row - visible_rows / 2;
 
@@ -245,9 +240,7 @@ void draw_running(const client_state_t *state)
     int last_col = first_col + visible_cols - 1;
     int last_row = first_row + visible_rows - 1;
 
-    /*
-     * Draw border around visible part of map.
-     */
+    // Uzzīmē rāmi ap redzamo kartes daļu
     for (int r = -1; r <= visible_rows; r++) {
         for (int c = -1; c <= visible_cols; c++) {
             if (r >= 0 && r < visible_rows && c >= 0 && c < visible_cols)
@@ -260,9 +253,7 @@ void draw_running(const client_state_t *state)
         }
     }
 
-    /*
-     * Draw only visible map cells.
-     */
+    // Zīmē tikai tās kartes šūnas, kas ietilpst redzamajā apgabalā
     for (int r = first_row; r <= last_row; r++) {
         for (int c = first_col; c <= last_col; c++) {
             uint16_t idx = make_cell_index(r, c, state->map.cols);
@@ -282,9 +273,7 @@ void draw_running(const client_state_t *state)
         }
     }
 
-    /*
-     * Draw only players who are inside the visible viewport.
-     */
+    // Zīmē tikai tos spēlētājus, kuri atrodas redzamajā kartes apgabalā.
     for (int i = 0; i < MAX_PLAYERS; i++) {
         if (state->players[i].name[0] == '\0')
             continue;

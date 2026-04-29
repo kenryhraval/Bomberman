@@ -1,12 +1,17 @@
 # Bomberman
+
+Projekts izstrādāts kursa [„Linukss sistēmas programmēšana”](http://andromeda.df.lu.lv/wiki/index.php/LU-LSP-b) ietvaros.
+
+Projekta grupas dalībnieki
+- Henrijs Kravals (50%)
+- Ņikita Kļepikovs (50%)
+
+
 Projekts ir vienkārša tīkla _Bomberman_ spēle ar servera un klienta komponentēm.
 
-Satura kopsavilkums
 - **Serveris**: pieņem klientu savienojumus un saņem un sūta ziņas pēc protokola, uztur spēles loģiku.
 - **Klients**: savienojas ar serveri, nosūta lietotāja darbības un attēlo spēli terminālī (`ncurses`).
 - **Shared**: kopīgās protokola struktūras, lasīšanas/rakstīšanas utilītfunkcijas un kopīgie tipi.
-
-Komponentu pārskats – svarīgākie faili
 
 Servera mape (`server/`):
 - `main.c`: programmas ieejas punkts serverim; inicializē serveri un izsauc `serve_main()`.
@@ -30,11 +35,7 @@ Kopīga daļa (`shared/`):
 - `common.h`: kopīgas konstantes, tipu definīcijas un konfigurācijas, ko izmanto gan serveris, gan klients.
 
 Kartes un konfigurācija
-- Noklusējuma karte atrodas `map.txt`. Karte satur gan laukuma šūnu datus, gan sākuma pozīcijas/konfigurācijas lauciņus, kas tiek nolasīti ar `server/map.c`.
-
-![alt text](images/image.png)
-![alt text](images/image-1.png)
-![alt text](images/image-2.png)
+- Karšu konfigurāciju faili atrodas mapē `map`. Karte satur gan laukuma šūnu datus, gan sākuma pozīcijas/konfigurācijas lauciņus, kas tiek nolasīti ar `server/map.c`.
 
 1. Kompilācija:
 
@@ -53,15 +54,3 @@ Kartes un konfigurācija
 	```bash
 	./build/client_app
 	```
-
-Protokola īss apraksts
-- Pēc savienojuma serveris un klients apmainās ar `HELLO`/`WELCOME` ziņojumiem – identificē klienta versiju un spēlētāja vārdu.
-- Klients nosūta ziņojumus: `MSG_SET_READY`, `MSG_MOVE_ATTEMPT`, `MSG_BOMB_ATTEMPT`, `MSG_PING`, `MSG_LEAVE`.
-- Serveris pārraida atjauninājumus visiem klientiem: `MSG_MAP`, `MSG_MOVED`, `MSG_BOMB`, `MSG_EXPLOSION_START`, `MSG_EXPLOSION_END`, `MSG_DEATH`, `MSG_STATISTICS`, `MSG_WINNER` utt.
-- Kopējās lasīšanas/ierakstīšanas utilītas atrodas `shared/protocol.c` un nodrošina drošu lasīšanu/ierakstīšanu uz _soketa_.
-
-Projekta autori
-- Skatīt `LICENSE` projekta saknē.
-
-_Projekts izstrādāts kursa [„Linukss sistēmas programmēšana”](http://andromeda.df.lu.lv/wiki/index.php/LU-LSP-b) ietvaros._
-

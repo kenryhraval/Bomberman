@@ -29,13 +29,13 @@ void mark_explosion(client_state_t *state, uint16_t center, uint8_t radius, uint
 
             uint16_t idx = make_cell_index(r, c, state->map.cols);
 
-            // explosion stops at hard walls
+            // Sprādziens apstājas pie nesalaužamās sienas
             if (state->map.cells[idx] == HARD_BLOCK)
                 break;
 
             state->overlay_map.cells[idx] = value;
 
-            // explosion stops after soft block
+            // Sprādziens vēl sasniedz mīksto bloku, bet tālāk neturpinās
             if (state->map.cells[idx] == SOFT_BLOCK)
                 break;
         }

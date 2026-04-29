@@ -130,8 +130,6 @@ int main(int argc, char *argv[])
     
     client_state_t state = {0};
 
-    // initialize map choices in state to avoid drawing 
-    // garbage data before we receive map choices from server
     state.map_choice_count = 0;
     state.selected_map_id = 0;
     memset(state.map_choices, 0, sizeof(state.map_choices));
@@ -144,6 +142,7 @@ int main(int argc, char *argv[])
 
     char player_name[MAX_NAME_LEN + 1] = {0};
 
+    // Inicializē ncurses režīmu ievadei un zīmēšanai terminālī
     initscr();
     noecho();
     cbreak();
@@ -190,6 +189,8 @@ int main(int argc, char *argv[])
         return 1;
     }
 
+
+    // Galvenais klienta cikls: apstrādā tīkla ziņas, pārzīmē skatu un nolasa ievadi
     int running = 1;
     while (running) {
         if (client_poll_network(&state) < 0) {
@@ -316,6 +317,7 @@ int main(int argc, char *argv[])
         }
     }
 
+    // Spēles beigās korekti aizver ncurses režīmu un TCP savienojumu
     endwin();
 
     client_send_leave(&state);

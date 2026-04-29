@@ -10,6 +10,8 @@
 
 int client_connect(client_state_t *state, const char *ip, int port)
 {
+
+    // Izveido TCP ligzdu un pieslēdzas serverim ar norādīto IP adresi un portu
     struct sockaddr_in addr;
 
     state->fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -44,14 +46,17 @@ int client_handshake(client_state_t *state, const char *player_name)
     snprintf(hello.client_id, sizeof(hello.client_id), CLIENT_ID);
     snprintf(hello.player_name, sizeof(hello.player_name), "%s", player_name);
 
+    // Nosūta HELLO ziņu un sagaida WELCOME atbildi no servera
     if (send_hello(state->fd, 255, 255, &hello) < 0)
         return -1;
 
+    // Serveris WELCOME galvenē norāda šim klientam piešķirto spēlētāja ID
     if (recv_welcome(state->fd, &header, &welcome) < 0)
         return -1;
 
     uint8_t my_id = header.target_id;
 
+    // Saglabā informāciju par sevi un citiem spēlētājiem lokālajā stāvoklī
     state->my_id = my_id;
     state->game_status = welcome.game_status;
     strncpy(state->server_id, welcome.server_id, MAX_CLIENT_ID_LEN);
@@ -92,7 +97,7 @@ void client_close(client_state_t *state)
     }
 }
 
-
+// Pārbauda, vai no servera ir pienākuši jauni dati, nebloķējot spēles ciklu
 int client_poll_network(client_state_t *state)
 {
     struct pollfd pfd;
@@ -128,6 +133,9 @@ int client_poll_network(client_state_t *state)
 
             uint8_t id = header.sender_id;
 
+            if (id >= MAX_PLAYERS)
+                return -1;
+
             if (state->players[id].name[0] == '\0')
                 state->player_count++;
 
@@ -139,21 +147,31 @@ int client_poll_network(client_state_t *state)
 
         } else if (header.msg_type == MSG_SET_READY) {
             uint8_t id = header.sender_id;
+
+            if (id >= MAX_PLAYERS)
+                return -1;
+
             state->players[id].ready = true;
 
         } else if (header.msg_type == MSG_LEAVE) {
             uint8_t id = header.sender_id;
+
+            if (id >= MAX_PLAYERS)
+                return -1;
+
             state->players[id].id = 0;
             state->players[id].name[0] = '\0';
             state->players[id].ready = false;
-            state->player_count--;
+
+            if (state->player_count > 0)
+                state->player_count--;
 
         } else if (header.msg_type == MSG_SET_STATUS) {
             msg_set_status_t payload;
             if (read_exact(state->fd, &payload, sizeof(payload)) < 0)
                 return -1;
 
-            // restart: returning to lobby from end-game, clear per-game state
+            // Restartējot spēli no beigu ekrāna, notīra iepriekšējās spēles stāvokli.
             if (state->game_status == GAME_END && payload.game_status == GAME_LOBBY) {
                 for (int i = 0; i < MAX_PLAYERS; i++) {
                     state->players[i].ready = false;
@@ -215,7 +233,16 @@ int client_poll_network(client_state_t *state)
                 return -1;
 
             uint8_t id = moved.player_id;
+
+            if (id >= MAX_PLAYERS)
+                return -1;
+
             uint16_t cell = ntohs(moved.cell);
+            if (cell >= state->map.rows * state->map.cols)
+                return -1;
+
+            if (state->map.cols == 0)
+                return -1;
 
             state->players[id].row = cell / state->map.cols;
             state->players[id].col = cell % state->map.cols;
@@ -227,6 +254,8 @@ int client_poll_network(client_state_t *state)
                 return -1;
 
             uint16_t cell = ntohs(bomb.cell);
+            if (cell >= state->map.rows * state->map.cols)
+                return -1;
             // atzīmē bumbu uz pamatkartes
             state->map.cells[cell] = BOMB;
            
@@ -237,6 +266,8 @@ int client_poll_network(client_state_t *state)
                 return -1;
 
             uint16_t cell = ntohs(explosion.cell);
+            if (cell >= state->map.rows * state->map.cols)
+                return -1;
             uint8_t radius = explosion.radius;
             // atzīmē sprādziena efektu pārklājuma kartē
             mark_explosion(state, cell, radius, 'X');
@@ -248,6 +279,8 @@ int client_poll_network(client_state_t *state)
                 return -1;
 
             uint16_t cell = ntohs(explosion.cell);
+            if (cell >= state->map.rows * state->map.cols)
+                return -1;
             uint8_t radius = explosion.radius;
             // noņem sprādziena efektu pārklājuma kartē
             mark_explosion(state, cell, radius, EMPTY);
@@ -261,6 +294,9 @@ int client_poll_network(client_state_t *state)
                 return -1;
 
             uint8_t id = death.player_id;
+            if (id >= MAX_PLAYERS)
+                return -1;
+
             state->players[id].alive = false;
 
         } else if (header.msg_type == MSG_BONUS_AVAILABLE) {
@@ -271,6 +307,9 @@ int client_poll_network(client_state_t *state)
 
             // atzīmē pieejamo bonusu uz pamatkartes
             uint16_t cell = ntohs(bonus.cell);
+            if (cell >= state->map.rows * state->map.cols)
+                return -1;
+
             state->map.cells[cell] = bonus.bonus_type;
 
         } else if (header.msg_type == MSG_BONUS_RETRIEVED) {
@@ -280,6 +319,9 @@ int client_poll_network(client_state_t *state)
                 return -1;
 
             uint16_t cell = ntohs(bonus.cell);
+            if (cell >= state->map.rows * state->map.cols)
+                return -1;
+
             // atzīmē, ka paņemto bonusu uz pamatkartes
             state->map.cells[cell] = EMPTY;
 
@@ -290,6 +332,9 @@ int client_poll_network(client_state_t *state)
                 return -1;
 
             uint16_t cell = ntohs(block.cell);
+            if (cell >= state->map.rows * state->map.cols)
+                return -1;
+
             // atzīmē iznīcināto bloku uz pamatkartes
             state->map.cells[cell] = EMPTY;
 
@@ -305,7 +350,7 @@ int client_poll_network(client_state_t *state)
             state->stats.bonuses_collected = ntohs(payload.stats.bonuses_collected);
         
         } else if (header.msg_type == MSG_PING) {
-            // server checks if client is still alive
+            // Serveris pārbauda, vai klients vēl ir aktīvs.
             if (send_pong(state->fd, state->my_id, SERVER) < 0)
                 return -1;
                 
@@ -358,6 +403,8 @@ int client_poll_network(client_state_t *state)
                 return -1;
 
             uint8_t id = payload.player_id;
+            if (id >= MAX_PLAYERS)
+                return -1;
 
             state->players[id].bomb_count = payload.bomb_count;
             state->players[id].bomb_radius = payload.bomb_radius;
@@ -368,6 +415,7 @@ int client_poll_network(client_state_t *state)
         } else {
             
             printf("Unhandled msg %u from server\n", header.msg_type);
+            return -1; // neapstrādāts ziņas tips
         }
     }
 
